@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan",
+  "description": "Persisted task plan. Stored at .tasks/<task_id>/plan.json in variant B. Produced by plan_write / plan_revise.",
+  "type": "object",
+  "properties": {
+    "task_id": {"type": "string"},
+    "goal": {"type": "string"},
+    "steps": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {"type": "string"},
+          "n": {"type": "integer", "minimum": 1},
+          "goal": {"type": "string"},
+          "preconds": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "checklist": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1
+          },
+          "action_hint": {"type": "string"},
+          "success_criteria": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["TODO", "IN_PROGRESS", "DONE", "FAILED", "NEEDS_REPLAN"]
+          },
+          "result": {"type": ["string", "null"]},
+          "notes": {"type": ["string", "null"]}
+        },
+        "required": ["n", "goal", "checklist", "action_hint", "success_criteria", "status"]
+      }
+    }
+  },
+  "required": ["task_id", "goal", "steps"]
+}

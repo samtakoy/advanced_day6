@@ -1,0 +1,27 @@
+{
+  "seed": "eval_08_plain",
+  "mode": "plain",
+  "provider": "openrouter",
+  "model": "openai/gpt-4o-mini",
+  "temperature": 0.3,
+  "input_messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Как правильно делить UI на platform-specific composables и общие компоненты в Compose Multiplatform?"
+    }
+  ],
+  "response": {
+    "content": "В Compose Multiplatform важно правильно организовать структуру UI, чтобы обеспечить максимальную переиспользуемость кода и адаптивность к различным платформам. Вот несколько рекомендаций по разделению UI на платформозависимые и общие компоненты:\n\n1. **Общие компоненты**:\n   - Создавайте общие компоненты, которые не зависят от платформы. Это могут быть компоненты, такие как кнопки, текстовые поля, списки и т.д., которые имеют одинаковый внешний вид и поведение на всех платформах.\n   - Используйте `@Composable` функции для создания этих компонентов. Например:\n\n     ```kotlin\n     @Composable\n     fun MyButton(onClick: () -> Unit, text: String) {\n         Button(onClick = onClick) {\n             Text(text)\n         }\n     }\n     ```\n\n2. **Платформозависимые компоненты**:\n   - Если есть необходимость в специфичном для платформы поведении или внешнем виде, создавайте отдельные компоненты для каждой платформы. Например, если вам нужно использовать специфические элементы управления, такие как `AlertDialog` в Android или `Dialog` в Desktop.\n   - Используйте интерфейсы или абстрактные классы для определения общего поведения, а затем реализуйте их для каждой платформы. Например:\n\n     ```kotlin\n     interface PlatformDialog {\n         @Composable\n         fun showDialog(title: String, message: String)\n     }\n     ```\n\n     Для Android:\n\n     ```kotlin\n     class AndroidDialog : PlatformDialog {\n         @Composable\n         override fun showDialog(title: String, message: String) {\n             AlertDialog(\n                 onDismissRequest = { /* ... */ },\n                 title = { Text(title) },\n                 text = { Text(message) },\n                 confirmButton = {\n                     Button(onClick = { /* ... */ }) {\n                         Text(\"OK\")\n                     }\n                 }\n             )\n         }\n     }\n     ```\n\n     Для Desktop:\n\n     ```kotlin\n     class DesktopDialog : PlatformDialog {\n         @Composable\n         override fun showDialog(title: String, message: String) {\n             // Реализация для Desktop\n         }\n     }\n     ```\n\n3. **Использование expect/actual**:\n   - Kotlin Multiplatform позволяет использовать `expect` и `actual` для определения платформозависимых реализаций. Это особенно полезно для компонентов, которые имеют схожую логику, но различаются в реализации.\n   - Например, вы можете создать `expect` функцию для получения текущего времени, а затем реализовать её для каждой платформы.\n\n4. **Структура проекта**:\n   - Разделите код на модули: создайте общий модуль для общих компонентов и модули для каждой платформы, где будут находиться платформозависимые компоненты.\n   - Это поможет поддерживать чистоту кода и упростит навигацию по проекту.\n\n5. **Тестирование**:\n   - Не забывайте тестировать как общие, так и платформозависимые компоненты. Это поможет убедиться в том, что они работают корректно на всех платформах.\n\nСледуя этим рекомендациям, вы сможете создать гибкую и поддерживаемую архитектуру UI в вашем приложении на Compose Multiplatform.",
+    "tool_calls": [],
+    "finish_reason": "stop"
+  },
+  "usage": {
+    "prompt_tokens": 1080,
+    "completion_tokens": 688,
+    "total_tokens": 1768
+  }
+}

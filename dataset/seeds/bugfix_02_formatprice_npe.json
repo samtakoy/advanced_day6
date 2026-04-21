@@ -1,0 +1,214 @@
+{
+  "_meta": {
+    "scenario": "bugfix_formatprice_npe_nullsafe_fallback",
+    "description": "Bugfix: formatPrice() in core/utils/PriceFormatter.kt throws NPE on null. Happy path, 3 steps: read → search_and_replace to make Double? + null fallback '—' → verify substrings. Demonstrates narrow bug fix without refactoring surrounding code.",
+    "task_id": "t-0305",
+    "mode": "agent",
+    "source_task_ref": "scenarios.py BUGFIX[4]",
+    "type": "bugfix"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты KMP-агент-исполнитель. Твоя работа — решать задачи по Kotlin Multiplatform проекту, соблюдая строгий пошаговый workflow.\n\n# Инструменты\n\n## State tools\n- plan_write(task_id, goal, steps) — создать план. ПЕРВЫМ на новой задаче.\n- step_read(task_id, step_n) — прочитать спецификацию шага.\n- step_update_result(task_id, step_n, status, result, notes?) — зафиксировать исход. Статусы: DONE / FAILED / NEEDS_REPLAN.\n- task_status(task_id) — общий статус задачи.\n- plan_revise(task_id, from_step, new_tail) — переписать хвост плана после NEEDS_REPLAN.\n\n## Project tools\n- read_file(path), list_dir(path)\n- search_and_replace(path, old_text, new_text) — правка существующего. matches=0 → не повторяй, replan.\n- write_file(path, content) — только для НОВЫХ файлов.\n\n# Workflow\n1. Первый ход — plan_write (>=2 шага, у каждого checklist и success_criteria).\n2. Перед любым action — step_read этого шага.\n3. В каждом сообщении: THOUGHT + SELF-CHECK + один tool_call.\n4. После action — step_update_result. При ошибке → NEEDS_REPLAN + plan_revise.\n5. Если данных мало — QUESTION: <вопрос> в content, без tool calls.\n\n# Current session\n\nTASK_ID: t-0305\n\nЭтот `task_id` — уникальный идентификатор текущей задачи, заданный session-контекстом. Используй его в аргументе `task_id` КАЖДОГО вызова state-инструментов (plan_write, step_read, step_update_result, task_status, plan_revise). Не изобретай новые идентификаторы и не оставляй поле пустым. Юзер в своём сообщении task_id не указывает — он всегда приходит через session-контекст."
+    },
+    {
+      "role": "user",
+      "content": "Bug: функция formatPrice в modules/core/core-utils/src/commonMain/kotlin/ru/samtakoy/stocks/core/utils/PriceFormatter.kt роняет NPE когда на вход приходит null. Надо сделать null-safe с fallback '—'."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Bugfix — узкая замена в одном файле. План: прочитать → заменить сигнатуру на Double? + вернуть '—' при null → verify. Старые вызовы формат-функции с non-null Double продолжат работать, поскольку Double под Double? ковариантен на вход.\nSELF-CHECK: путь к файлу дан, описание симптома и ожидаемого поведения однозначно — plan_write можно.",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "plan_write",
+            "arguments": "{\"task_id\":\"t-0305\",\"goal\":\"Make formatPrice null-safe with '—' fallback in PriceFormatter.kt\",\"steps\":[{\"n\":1,\"goal\":\"Read PriceFormatter.kt to capture exact function signature and body\",\"preconds\":[],\"checklist\":[\"file contains 'fun formatPrice'\",\"parameter type captured\",\"return type captured\",\"current body captured\"],\"action_hint\":\"read_file on the given path\",\"success_criteria\":\"content contains 'fun formatPrice'\"},{\"n\":2,\"goal\":\"Replace body: accept Double? and return '—' for null\",\"preconds\":[\"step 1 DONE\"],\"checklist\":[\"old_text verbatim from step 1\",\"parameter becomes Double?\",\"null-branch returns '—'\",\"non-null formatting logic preserved bit-for-bit\"],\"action_hint\":\"search_and_replace, old_text = full current function block, new_text = rewritten function with null-check\",\"success_criteria\":\"matches == 1\"},{\"n\":3,\"goal\":\"Verify: re-read, confirm 'Double?' param and fallback present\",\"preconds\":[\"step 2 DONE\"],\"checklist\":[\"'price: Double?' substring present\",\"'return \\\"—\\\"' or equivalent null branch present\",\"original non-null formatting path still present\"],\"action_hint\":\"read_file and substring checks\",\"success_criteria\":\"all 3 substrings found\"}]}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c1",
+      "content": "{\"ok\": true}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: К шагу 1 — читаю файл.\nSELF-CHECK: читаю спецификацию шага.",
+      "tool_calls": [
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "step_read",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":1}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c2",
+      "content": "{\"task_id\":\"t-0305\",\"n\":1,\"goal\":\"Read PriceFormatter.kt to capture exact function signature and body\",\"preconds\":[],\"checklist\":[\"file contains 'fun formatPrice'\",\"parameter type captured\",\"return type captured\",\"current body captured\"],\"action_hint\":\"read_file on the given path\",\"success_criteria\":\"content contains 'fun formatPrice'\",\"status\":\"TODO\",\"result\":null,\"notes\":null}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Читаю файл, чтобы увидеть текущую сигнатуру — нужен точный anchor для search_and_replace в шаге 2.\nSELF-CHECK: после чтения сверю 4 пункта: formatPrice найдена, параметр, возврат, тело.",
+      "tool_calls": [
+        {
+          "id": "c3",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"modules/core/core-utils/src/commonMain/kotlin/ru/samtakoy/stocks/core/utils/PriceFormatter.kt\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c3",
+      "content": "{\"content\":\"package ru.samtakoy.stocks.core.utils\\n\\nfun formatPrice(price: Double): String {\\n    val rounded = (price * 100).toLong() / 100.0\\n    return \\\"$rounded ₽\\\"\\n}\\n\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Сигнатура — `fun formatPrice(price: Double): String`, non-null Double. Замена нужна на Double? с ранним return '—' до существующей логики форматирования. Важно сохранить round-логику без изменения.\nSELF-CHECK: (1) 'fun formatPrice' ✓, (2) param type: Double ✓, (3) return type: String ✓, (4) body: 2 строки (round + return) ✓. Достаточно для step 2.",
+      "tool_calls": [
+        {
+          "id": "c4",
+          "type": "function",
+          "function": {
+            "name": "step_update_result",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":1,\"status\":\"DONE\",\"result\":\"signature: fun formatPrice(price: Double): String; body: round via (x*100).toLong()/100.0 then return \\\"$rounded ₽\\\"; no imports needed for null-fallback\",\"notes\":\"step 2 old_text will span the whole function block from 'fun formatPrice' through the closing '}' to ensure matches==1\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c4",
+      "content": "{\"ok\": true}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: К шагу 2 — правка.\nSELF-CHECK: читаю спецификацию шага.",
+      "tool_calls": [
+        {
+          "id": "c5",
+          "type": "function",
+          "function": {
+            "name": "step_read",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":2}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c5",
+      "content": "{\"task_id\":\"t-0305\",\"n\":2,\"goal\":\"Replace body: accept Double? and return '—' for null\",\"preconds\":[\"step 1 DONE\"],\"checklist\":[\"old_text verbatim from step 1\",\"parameter becomes Double?\",\"null-branch returns '—'\",\"non-null formatting logic preserved bit-for-bit\"],\"action_hint\":\"search_and_replace, old_text = full current function block, new_text = rewritten function with null-check\",\"success_criteria\":\"matches == 1\",\"status\":\"TODO\",\"result\":null,\"notes\":null}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Заменяю весь function-блок. Делаю early return для null, затем сохраняю оригинальную логику форматирования — никаких лишних правок.\nSELF-CHECK: (1) old_text слово в слово из content шага 1 ✓, (2) параметр: Double? ✓, (3) null-ветка возвращает '—' ✓, (4) rounded-логика сохранена без изменений ✓.",
+      "tool_calls": [
+        {
+          "id": "c6",
+          "type": "function",
+          "function": {
+            "name": "search_and_replace",
+            "arguments": "{\"path\":\"modules/core/core-utils/src/commonMain/kotlin/ru/samtakoy/stocks/core/utils/PriceFormatter.kt\",\"old_text\":\"fun formatPrice(price: Double): String {\\n    val rounded = (price * 100).toLong() / 100.0\\n    return \\\"$rounded ₽\\\"\\n}\",\"new_text\":\"fun formatPrice(price: Double?): String {\\n    if (price == null) return \\\"—\\\"\\n    val rounded = (price * 100).toLong() / 100.0\\n    return \\\"$rounded ₽\\\"\\n}\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c6",
+      "content": "{\"ok\": true, \"matches\": 1}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: matches=1, замена выполнена. Фиксирую шаг 2.\nSELF-CHECK: success_criteria (matches == 1) ✓.",
+      "tool_calls": [
+        {
+          "id": "c7",
+          "type": "function",
+          "function": {
+            "name": "step_update_result",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":2,\"status\":\"DONE\",\"result\":\"signature now Double?; null-path returns '—'; non-null path unchanged\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c7",
+      "content": "{\"ok\": true}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: К шагу 3 — verify.\nSELF-CHECK: читаю спецификацию.",
+      "tool_calls": [
+        {
+          "id": "c8",
+          "type": "function",
+          "function": {
+            "name": "step_read",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":3}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c8",
+      "content": "{\"task_id\":\"t-0305\",\"n\":3,\"goal\":\"Verify: re-read, confirm 'Double?' param and fallback present\",\"preconds\":[\"step 2 DONE\"],\"checklist\":[\"'price: Double?' substring present\",\"'return \\\"—\\\"' or equivalent null branch present\",\"original non-null formatting path still present\"],\"action_hint\":\"read_file and substring checks\",\"success_criteria\":\"all 3 substrings found\",\"status\":\"TODO\",\"result\":null,\"notes\":null}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Перечитываю файл и проверяю 3 подстроки.\nSELF-CHECK: проверка по факту, не по ожиданию.",
+      "tool_calls": [
+        {
+          "id": "c9",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"modules/core/core-utils/src/commonMain/kotlin/ru/samtakoy/stocks/core/utils/PriceFormatter.kt\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c9",
+      "content": "{\"content\":\"package ru.samtakoy.stocks.core.utils\\n\\nfun formatPrice(price: Double?): String {\\n    if (price == null) return \\\"—\\\"\\n    val rounded = (price * 100).toLong() / 100.0\\n    return \\\"$rounded ₽\\\"\\n}\\n\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Все три подстроки на месте.\nSELF-CHECK:\n  (1) 'price: Double?' ✓\n  (2) 'return \"—\"' ✓\n  (3) '(price * 100).toLong() / 100.0' и 'return \"$rounded ₽\"' — оригинальная non-null логика сохранена ✓\nsuccess_criteria выполнен.",
+      "tool_calls": [
+        {
+          "id": "c10",
+          "type": "function",
+          "function": {
+            "name": "step_update_result",
+            "arguments": "{\"task_id\":\"t-0305\",\"step_n\":3,\"status\":\"DONE\",\"result\":\"all 3 checklist substrings confirmed; function now null-safe with '—' fallback\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "c10",
+      "content": "{\"ok\": true}"
+    },
+    {
+      "role": "assistant",
+      "content": "Bugfix t-0305 закрыт: formatPrice теперь принимает Double? и при null возвращает '—'; non-null ветка форматирования сохранена без изменений."
+    }
+  ]
+}

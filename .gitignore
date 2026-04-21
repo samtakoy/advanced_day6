@@ -1,0 +1,15 @@
+.idea
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.tasks/
+dataset/synthetic_raw.jsonl
+baseline/outputs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/

@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "scenario": "polymorphic_serialization_sealed_hierarchy",
+    "description": "This example illustrates how to set up polymorphic serialization with a sealed class hierarchy in kotlinx-serialization, anchoring the plain-mode response with Kotlin code and senior engineer-level explanation.",
+    "task_id": null,
+    "mode": "plain",
+    "topic": "serialization",
+    "generated_by": "openai/gpt-4o",
+    "scenario_seed": "serialization: Как настроить Polymorphic serialization в kotlinx-serialization с sealed-иерархией?"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Как настроить Polymorphic serialization в kotlinx-serialization с sealed-иерархией?"
+    },
+    {
+      "role": "assistant",
+      "content": "Для настройки полиморфной сериализации в kotlinx-serialization с sealed-классами, необходимо использовать аннотацию `@Serializable` и специальный `PolymorphicSerializer`. Sealed-классы в Kotlin упрощают полиморфизм, так как они сами по себе ограничивают количество возможных подклассов, а kotlinx-serialization поддерживает их из коробки.\n\nНачнем с объявления sealed-класса и его подклассов:\n\n```kotlin\nimport kotlinx.serialization.*\nimport kotlinx.serialization.json.*\n\n@Serializable\nsealed class Animal {\n    @Serializable\n    data class Cat(val name: String) : Animal()\n\n    @Serializable\n    data class Dog(val breed: String) : Animal()\n}\n```\n\nДля того чтобы сериализовать объекты этого иерархического класса, необходимо использовать `Json { serializersModule = ... }`, где вы регистрируете все подклассы:\n\n```kotlin\nval module = SerializersModule {\n    polymorphic(Animal::class) {\n        subclass(Animal.Cat::class, Animal.Cat.serializer())\n        subclass(Animal.Dog::class, Animal.Dog.serializer())\n    }\n}\n\nval json = Json { serializersModule = module }\n```\n\nПосле этого, вы можете сериализовать и десериализовать объекты `Animal`:\n\n```kotlin\nval cat: Animal = Animal.Cat(\"Whiskers\")\nval jsonData = json.encodeToString(PolymorphicSerializer(Animal::class), cat)\nprintln(jsonData) // Выведет что-то вроде: {\"type\":\"Cat\",\"name\":\"Whiskers\"}\n\nval decodedCat = json.decodeFromString(PolymorphicSerializer(Animal::class), jsonData)\nprintln(decodedCat) // Восстановит оригинальный объект\n```\n\nКлючевые моменты:\n\n1. **Регистрация подклассов.** Полиморфная сериализация требует явной регистрации всех подклассов в `SerializersModule`.\n2. **Безопасность sealed-классов.** Sealed-классы сами ограничивают количество подклассов, что упрощает управление полиморфизмом.\n3. **Формат JSON.** Полиморфная сериализация добавляет поле \"type\", чтобы различать объекты разных подклассов.\n\nТакой подход позволяет легко управлять сложными иерархиями типов и безопасно сериализовать и десериализовать объекты."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "scenario": "vague_task_requires_clarification",
+    "description": "Data-insufficient scenario: user asks to 'add a database' without specifying engine, module, or schema. Model recognizes ambiguity, does NOT write a plan, instead returns QUESTION with specific clarifying questions. Short example, one exchange. Prevents the model from hallucinating plans on underspecified input.",
+    "task_id": "t-0077",
+    "mode": "agent_question"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты KMP-агент-исполнитель. Твоя работа — решать задачи по Kotlin Multiplatform проекту, соблюдая строгий пошаговый workflow.\n\n# Инструменты\n\n## State tools — управление твоим планом задачи\n- plan_write(task_id, goal, steps) — создать план. Вызывается ПЕРВЫМ на новой задаче.\n- step_read(task_id, step_n) — прочитать спецификацию шага. Вызывается ПЕРЕД каждым действием.\n- step_update_result(task_id, step_n, status, result, notes?) — зафиксировать исход шага. Статусы: DONE / FAILED / NEEDS_REPLAN.\n- task_status(task_id) — получить общий статус задачи.\n- plan_revise(task_id, from_step, new_tail) — переписать хвост плана после NEEDS_REPLAN.\n\n## Project tools — работа с кодом\n- read_file(path) — прочитать файл проекта.\n- list_dir(path) — список файлов в папке.\n- search_and_replace(path, old_text, new_text) — точечная замена; возвращает matches. Если matches=0 — не повторяй, переходи к replan.\n\n# Workflow\n1. Первый ход на новой задаче — plan_write. Минимум 2 шага, у каждого непустой checklist и success_criteria.\n2. Перед ЛЮБЫМ действием — step_read этого шага.\n3. Каждое сообщение: THOUGHT (1-3 предл.) + SELF-CHECK (сверка с checklist) + один tool_call.\n4. После action — step_update_result. Не переходи к следующему шагу без этого.\n5. При ошибке (matches=0, ok=false): НЕ повторяй вызов. step_update_result со NEEDS_REPLAN, затем plan_revise.\n6. Если данных мало — QUESTION: <вопрос> в content, без tool calls.\n\n# Current session\n\nTASK_ID: t-0077\n\nЭтот `task_id` — уникальный идентификатор текущей задачи, заданный session-контекстом. Используй его в аргументе `task_id` КАЖДОГО вызова state-инструментов (plan_write, step_read, step_update_result, task_status, plan_revise). Не изобретай новые идентификаторы и не оставляй поле пустым. Юзер в своём сообщении task_id не указывает — он всегда приходит через session-контекст."
+    },
+    {
+      "role": "user",
+      "content": "Добавь в проект локальную базу данных."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Запрос слишком общий. В KMP минимум три реалистичных движка с разным API и разной ценой интеграции (SQLDelight — KMP-native, предпочтителен; Room — исторически только Android, KMP-обёртки появились, но всё ещё с ограничениями; Realm — с KMP-поддержкой, но тяжеловесный). Также неясны: в какой модуль добавлять (shared commonMain vs feature-модуль), начинаем ли с нуля или расширяем существующие таблицы, нужны ли миграции.\nSELF-CHECK: для plan_write минимально требуется (1) выбор движка, (2) целевой модуль, (3) скоуп (новая схема vs расширение). Ни один из трёх пунктов в запросе не определён. План без этого был бы угадыванием — риск пойти не в тот движок и сломать архитектуру. По правилу 6 пишу QUESTION.\n\nQUESTION: Чтобы собрать рабочий план, уточни три пункта:\n\n1. Какой движок используем — SQLDelight (KMP-native, рекомендую по умолчанию), Room (подходит, если основная цель Android и KMP-обёртка устраивает), Realm или что-то ещё?\n2. В какой модуль добавлять — в shared (commonMain, доступно всем платформам) или в отдельный feature-модуль (например, feature-storage)?\n3. Это новая схема с нуля или расширяем существующие entity? Если есть существующая схема — укажи путь к файлам, чтобы я учёл их при планировании."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "scenario": "expect_actual_vs_hierarchical_source_sets",
+    "description": "Discusses when to use expect/actual vs hierarchical source sets in KMP architecture.",
+    "task_id": null,
+    "mode": "plain",
+    "topic": "kmp_architecture",
+    "generated_by": "openai/gpt-4o",
+    "scenario_seed": "kmp_architecture: Когда стоит использовать expect/actual, а когда intermediate source sets с hierarchical setup?"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Когда стоит использовать expect/actual, а когда intermediate source sets с hierarchical setup?"
+    },
+    {
+      "role": "assistant",
+      "content": "Вопрос использования expect/actual против intermediate source sets в KMP зависит от целей и структуры вашего проекта.\n\n`expect/actual` — это механизм, который позволяет вам определять API в общих модулях (commonMain) и предоставлять платформенные реализации в специфических модулях (например, androidMain, iosMain). Это удобно, когда у вас есть чётко определённые платформенно-зависимые реализации, которые нужно замкнуть на уровне компиляции. Например, вы можете использовать `expect/actual` для абстрагирования работы с файловой системой:\n\n```kotlin\n// commonMain\nexpect fun getFilePath(): String\n\n// androidMain\nactual fun getFilePath(): String {\n    return \"android-specific-path\"\n}\n\n// iosMain\nactual fun getFilePath(): String {\n    return \"ios-specific-path\"\n}\n```\n\nЭтот подход позволяет точно контролировать, какая реализация будет использована для каждой платформы, и гарантирует, что все платформы имеют свою реализацию.\n\n`Intermediate source sets` с `hierarchical setup` полезны, когда вы хотите переиспользовать код между несколькими платформами, которые имеют общие особенности. Например, можно создать модуль, который будет использоваться и Android, и iOS, если они оба могут использовать одну и ту же логику, но всё ещё имеют специфические реализации для JVM и Native. Это особенно актуально, когда у вас есть код, который может переиспользоваться между различными платформами, но не относится к общему коду.\n\nКлючевые моменты для выбора:\n\n- Используйте `expect/actual`, когда реализация строго зависит от платформы и должна быть одна для каждой платформы.\n- Выбирайте `intermediate source sets`, когда у вас есть возможность переиспользовать код между несколькими платформами, минимизируя дублирование кода и улучшая поддержку кода.\n\nКомбинация этих подходов позволяет строить гибкие и масштабируемые архитектуры в KMP, максимально используя преимущества каждой платформы и общих модулей."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "scenario": "libs_versions_toml_vs_groovy",
+    "description": "This example addresses the purpose and advantages of using `libs.versions.toml` in Gradle KMP projects, highlighting the benefits over traditional flat version catalogs in Groovy. It anchors plain-mode by providing a clear explanation in natural prose, without any agent-specific formatting.",
+    "task_id": null,
+    "mode": "plain",
+    "topic": "gradle_kmp",
+    "generated_by": "openai/gpt-4o",
+    "scenario_seed": "gradle_kmp: Зачем нужен libs.versions.toml и чем он лучше плоских version catalogs в Groovy?"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Зачем нужен libs.versions.toml и чем он лучше плоских version catalogs в Groovy?"
+    },
+    {
+      "role": "assistant",
+      "content": "Использование `libs.versions.toml` в Gradle KMP проектах позволяет управлять зависимостями и их версиями более структурированно и удобно, чем это возможно в плоских версиях каталогов на основе Groovy. \n\nФайл `libs.versions.toml` предоставляет декларативный способ описания всех версий библиотек в одном месте, что упрощает управление и обновление зависимостей. В отличие от традиционного подхода с использованием Groovy, где версии часто разбросаны по различным сборочным скриптам, TOML-файл позволяет централизовать эту информацию, делая её более доступной и управляемой.\n\n```toml\n# libs.versions.toml\n[versions]\nkotlin = \"1.6.10\"\ncoroutines = \"1.5.2\"\n\n[libraries]\nkotlin-stdlib = { module = \"org.jetbrains.kotlin:kotlin-stdlib\", version.ref = \"kotlin\" }\nkotlinx-coroutines-core = { module = \"org.jetbrains.kotlinx:kotlinx-coroutines-core\", version.ref = \"coroutines\" }\n```\n\nС точки зрения преимуществ, использование TOML позволяет:\n\n1. **Чёткая структура и читабельность.** TOML-файлы проще визуально воспринимать и редактировать, чем громоздкие Groovy-скрипты, особенно для людей, не знакомых с языком Groovy.\n2. **Централизация версий.** Все версии находятся в одном месте, что упрощает процесс обновления, минимизируя риск ошибочного использования разных версий одной библиотеки в разных модулях проекта.\n3. **Устойчивость к ошибкам.** TOML-файлы предоставляют более строгий синтаксис, что может помочь избежать ошибок при вводе данных.\n\nТаким образом, `libs.versions.toml` предоставляет более современный и удобный подход к управлению зависимостями в Gradle проектах, особенно в многомодульных системах, характерных для KMP."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "scenario": "testing_mokkery_turbine",
+    "description": "Conceptual comparison of testing libraries for KMP, anchors plain-mode behavior without agent context.",
+    "task_id": null,
+    "mode": "plain",
+    "topic": "testing",
+    "generated_by": "openai/gpt-oss-120b:free",
+    "scenario_seed": "testing: Чем Mokkery лучше MockK/Mockito для KMP и в каких случаях использовать Turbine вместо собственных collect-хелперов?"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Чем Mokkery лучше MockK/Mockito для KMP и в каких случаях использовать Turbine вместо собственных collect‑хелперов?"
+    },
+    {
+      "role": "assistant",
+      "content": "Mokkery изначально проектировался под Kotlin Multiplatform, поэтому его API полностью доступен в commonMain и не требует дополнительных зависимостей для каждой платформы. MockK и Mockito работают только на JVM, а в KMP‑проектах их приходится «запихивать» в androidMain/iosMain через отдельные artefacts, что усложняет сборку и иногда приводит к конфликтам с Kotlin/Native.\n\nГлавные плюсы Mokkery:\n- компилируется в Kotlin/Native без reflection, значит тесты работают и на iOS‑симуляторе;\n- декларативный DSL (`every { … } returns …`) полностью типобезопасен и проверяется на этапе компиляции;\n- небольшая зависимость, без тяжёлого runtime, что ускоряет запуск тестов.\n\nТем не менее, если ваш код уже сильно привязан к JVM‑стеку и вы не планируете запускать юнит‑тесты на iOS, MockK может предложить более богатый набор функций (spy, static mocking и т.д.).\n\nЧто касается Turbine, это небольшая библиотека‑надстройка над `kotlinx.coroutines.flow`, которая упрощает проверку последовательностей эмиссий. Вместо того чтобы писать собственный `collect`‑хелпер с `delay`‑ами и `assertEquals`, вы получаете удобный API:\n\n```kotlin\n@Test\nfun `flow emits three values`() = runTest {\n    val flow = flowOf(1, 2, 3)\n    flow.test {\n        assertEquals(1, awaitItem())\n        assertEquals(2, awaitItem())\n        assertEquals(3, awaitItem())\n        awaitComplete()\n    }\n}\n```\n\nTurbine особенно полезен, когда нужно точно контролировать порядок и тайминг эмиссий, а также проверять завершение или ошибки. Если же ваш поток очень простой (например, `flow { emit(value) }`) и вы проверяете только конечный результат, обычный `collect` в сочетании с `runTest` будет менее нагруженным и не требует дополнительной зависимости.\n\nИтого, выбирайте Mokkery, когда нужен кроссплатформенный мокинг без JVM‑специфичных фич, а Turbine — когда тестируете сложные потоки с несколькими шагами, тайм‑аутами или ожидаете исключения."
+    }
+  ]
+}
