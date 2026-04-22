@@ -42,7 +42,7 @@
 ```
 Три роли (system/user/assistant) присутствуют в каждом примере; для агентских ещё и `tool` — это допускается OpenAI FT API.
 
-**Соотношение real/synth: 12/58 = 20.7% реальных.** Превышает требуемый порог задания ≥20%. Все 12 seeds — полные эталоны с 3-39 сообщениями каждый, включая replan-сценарий (`golden_01_add_dep_with_replan`). Все синтетические сценарии так же seed'нуты из реального task board KMP-проекта (`dataset/scenarios.py` ссылается на `C:\devs\kmm\stocks\task\board\pool`).
+**Соотношение real/synth: 12/58 = 20.7% реальных.** Превышает требуемый порог задания ≥20%. Все 12 seeds — полные эталоны с 3-39 сообщениями каждый, включая replan-сценарий (`golden_01_add_dep_with_replan`). Все синтетические сценарии так же seed'нуты из реального task board KMP-проекта (`src/dataset/scenarios.py` ссылается на `C:\devs\kmm\stocks\task\board\pool`).
 
 **Список seeds (12 hand-crafted реальных):**
 
@@ -85,11 +85,11 @@
 - **Пропорция: 80/20** (требование задания).
 - **Метод: stratified** — доли режимов (agent / agent_question / plain) сохраняются в обеих частях. Это важно: если бы eval оказался без plain-примеров, мы не смогли бы замерить catastrophic-forgetting.
 - **Seed: 42** для воспроизводимости (`random.Random(42)`).
-- **Файлы:** `dataset/train.jsonl` (47 строк), `dataset/eval.jsonl` (11 строк).
+- **Файлы:** `data/out/train.jsonl` (47 строк), `data/out/eval.jsonl` (11 строк).
 
 ### Скрипт валидации
 
-**Файл: `validator/validate.py`.** Три независимых прохода:
+**Файл: `src/validator/validate.py`.** Три независимых прохода:
 
 **Structural checks:**
 - каждая строка — валидный JSON
@@ -108,7 +108,7 @@
 
 **Dedup check:** попарное сравнение первого user-message по всем примерам; дубли помечаются как warning.
 
-**Команда:** `python -m validator.validate dataset/synthetic/`
+**Команда:** `python -m src.validator.validate data/synthetic/`
 
 **Результат финального прогона:** 0 errors, 0 warnings (после устранения 3 дублей).
 
@@ -116,12 +116,12 @@
 
 ## 4. Baseline
 
-**Файл: `baseline/run_baseline.py`.** Прогон сделан ДВАЖДЫ для двойной проверки:
+**Файл: `src/baseline/run_baseline.py`.** Прогон сделан ДВАЖДЫ для двойной проверки:
 
 1. **На 8 seeds** (исходный прогон) → `baseline/outputs/summary.md`
 2. **На 11 примерах `eval.jsonl`** (после финального mix+split, ровно по требованию задания) → `baseline/outputs_eval/summary.md`
 
-Скрипт параметризован флагом `--from-jsonl`: `python -m baseline.run_baseline --from-jsonl dataset/eval.jsonl`.
+Скрипт параметризован флагом `--from-jsonl`: `python -m src.baseline.run_baseline --from-jsonl data/out/eval.jsonl`.
 
 ### Результаты baseline на `eval.jsonl` (n=11, gpt-4o-mini, T=0.3)
 
@@ -156,19 +156,28 @@
 
 ### Анти-catastrophic-forgetting
 
-**Файл: `dataset/eval_plain.jsonl`** — 5 концептуальных KMP-вопросов с `system_plain.md` (без tool calls). Прогон через baseline и FT-модель даст ответ на ключевой вопрос: не поломала ли FT способность отвечать прозой? Требование: LLM-judge plain-ответов FT-модели не хуже baseline более чем на 10%.
+**Файл: `data/out/eval_plain.jsonl`** — 5 концептуальных KMP-вопросов с `system_plain.md` (без tool calls). Прогон через baseline и FT-модель даст ответ на ключевой вопрос: не поломала ли FT способность отвечать прозой? Требование: LLM-judge plain-ответов FT-модели не хуже baseline более чем на 10%.
 
 ---
 
 ## 5. FT-клиент
 
-**Папка: `ft_client/`.**
+**Папка: `src/ft_client/`** — два бэкенда: `openai/` (API) и `mlx/` (локальный).
+
+**OpenAI бэкенд (`src/ft_client/openai/`):**
 
 | Файл | Команда | Что делает |
 |---|---|---|
-| `upload.py` | `python -m ft_client.upload --validation dataset/eval.jsonl` | `client.files.create(file, purpose="fine-tune")`, сохраняет `training_file` и `validation_file` id в `last_upload.json` |
-| `create_job.py` | `python -m ft_client.create_job` (dry-run) <br> `python -m ft_client.create_job --confirm` (реальный запуск) | `client.fine_tuning.jobs.create(...)`. **Без `--confirm` только печатает spec, ничего не отправляет** (требование задания) |
-| `poll.py` | `python -m ft_client.poll <job_id>` | Опрос `client.fine_tuning.jobs.retrieve(job_id)` раз в 30 с, выходит на `succeeded`/`failed`/`cancelled` |
+| `upload.py` | `python -m src.ft_client.openai.upload --validation data/out/eval.jsonl` | `client.files.create(file, purpose="fine-tune")`, сохраняет file id в `last_upload.json` |
+| `create_job.py` | `python -m src.ft_client.openai.create_job` (dry-run) <br> `python -m src.ft_client.openai.create_job --confirm` (реальный запуск) | `client.fine_tuning.jobs.create(...)`. **Без `--confirm` только печатает spec** |
+| `poll.py` | `python -m src.ft_client.openai.poll <job_id>` | Опрос статуса раз в 30 с |
+
+**MLX бэкенд (`src/ft_client/mlx/`):**
+
+| Файл | Команда | Что делает |
+|---|---|---|
+| `train.py` | `python -m src.ft_client.mlx.train` | QLoRA обучение через mlx_lm.lora. Автоматически инжектит tool schemas в датасет |
+| `export.py` | `python -m src.ft_client.mlx.export` | Merge адаптера → GGUF → Ollama import |
 
 **Значения по умолчанию:**
 - Model: `gpt-4o-mini-2024-07-18`
@@ -188,10 +197,10 @@
 - [x] **20.7% реальных** (12 hand-crafted seeds из реальных KMP-задач) — ≥20% порог выполнен
 - [x] Убран мусор: dedup, пустые, длины в пределах
 - [x] **Train 47 (80%) + Eval 11 (20%)**, stratified
-- [x] Скрипт валидации: `validator/validate.py` — structural + semantic + dedup
-- [x] **Baseline на 11 примерах `eval.jsonl`** через `gpt-4o-mini` без FT, отчёт в `baseline/outputs_eval/summary.md` (плюс исходный на seeds в `baseline/outputs/summary.md`)
+- [x] Скрипт валидации: `src/validator/validate.py` — structural + semantic + dedup
+- [x] **Baseline на 11 примерах `eval.jsonl`** через `gpt-4o-mini` без FT, отчёт в `src/baseline/outputs_eval/summary.md`
 - [x] Критерии «стало лучше» — 5 авто + 2 LLM-judge в `criteria/criteria.md`
-- [x] Клиент fine-tune: `ft_client/{upload,create_job,poll}.py` — **dry-run, не запущен**
+- [x] Клиент fine-tune: `src/ft_client/openai/` (OpenAI) + `src/ft_client/mlx/` (локальный MLX) — **dry-run, не запущен**
 
 ---
 
@@ -203,37 +212,39 @@
 
 ---
 
-## 8. Особая оговорка: локальное обучение
+## 8. Локальное обучение (MLX)
 
-В процессе работы возник вопрос: обучать планируется не через OpenAI API, а локально на Mac 48GB (MLX-LM + LoRA на `Qwen2.5-7B-Instruct` или `Llama-3.1-8B-Instruct`). **Датасет на 100% переносим** — `messages[]` с `tool_calls` поддерживается во всех современных open-weight моделях. Меняются только:
+Помимо OpenAI API, проект поддерживает **локальный fine-tuning на Mac Apple Silicon** через MLX:
 
-1. Базовая модель (open-weight вместо gpt-4o-mini)
-2. Baseline должен прогоняться через эту же open-weight модель (через OpenRouter, где они доступны)
-3. `ft_client/` заменяется на 2-3 команды `mlx_lm.lora ... --train --data dataset/ --iters 300` — напишется в День 7+
+- **Модель**: Qwen 2.5 7B Instruct (HF: `Qwen/Qwen2.5-7B-Instruct`), ~8-10 GB peak RAM при QLoRA
+- **Датасет переносим на 100%** — `mlx_lm` v0.31+ нативно поддерживает OpenAI chat format с `tool_calls`
+- **Бэкенд**: `src/ft_client/mlx/train.py` (обучение) + `src/ft_client/mlx/export.py` (merge → GGUF → Ollama)
+- **Eval**: `src/baseline/run_baseline.py --provider ollama --model kmp-agent-ft`
 
-Текущие `upload/create_job/poll` скрипты всё равно остаются рабочими для cross-проверки на OpenAI FT при желании.
+OpenAI-скрипты (`src/ft_client/openai/`) остаются рабочими для cross-проверки.
 
 ---
 
 ## 9. Файлы для сдачи
 
-- `dataset/train.jsonl` — **47** строк
-- `dataset/eval.jsonl` — **11** строк
-- `dataset/eval_plain.jsonl` — 5 строк (mini-eval plain для anti-catastrophic-forgetting)
-- `dataset/seeds/*.json` — **12** исходных seed-примеров
-- `dataset/synthetic/*.json` — **46** сгенерированных
-- `validator/validate.py` — скрипт валидации
-- `baseline/run_baseline.py` + `baseline/outputs/` (seeds) + `baseline/outputs_eval/` (eval.jsonl) — два бейзлайна и отчёты
+- `data/out/train.jsonl` — **47** строк
+- `data/out/eval.jsonl` — **11** строк
+- `data/out/eval_plain.jsonl` — 5 строк (anti-catastrophic-forgetting)
+- `data/seeds/*.json` — **12** исходных seed-примеров
+- `data/synthetic/*.json` — **46** сгенерированных
+- `src/validator/validate.py` — скрипт валидации
+- `src/baseline/run_baseline.py` + `src/baseline/outputs_eval/` — бейзлайн и отчёты
 - `criteria/criteria.md` — критерии оценки
-- `ft_client/{upload,create_job,poll}.py` + `ft_client/README.md` — клиент
-- `README.md` / `EXPLANATION.md` / `REPORT.md` — сопровождающая документация
+- `src/ft_client/openai/` — OpenAI FT клиент
+- `src/ft_client/mlx/` — локальный MLX FT клиент
+- `README.md` / `EXPLANATION.md` / `REPORT.md` — документация
 
 **Воспроизведение с нуля** (при наличии API-ключей в `.env`):
 ```bash
 pip install -r requirements.txt
-python -m dataset.gen_synthetic --count 46 --model openai/gpt-oss-120b:free --seed 42
-python -m validator.validate dataset/synthetic
-python -m dataset.mix_and_split
-python -m baseline.run_baseline
-python -m dataset.summarize
+python -m src.dataset.gen_synthetic --count 46 --model openai/gpt-oss-120b:free --seed 42
+python -m src.validator.validate data/synthetic
+python -m src.dataset.mix_and_split
+python -m src.baseline.run_baseline
+python -m src.dataset.summarize
 ```

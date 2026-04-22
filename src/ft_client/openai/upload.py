@@ -4,9 +4,9 @@
 Logs the resulting file_id; pipe into create_job.py.
 
 Usage:
-    python -m ft_client.upload                       # default: dataset/train.jsonl
-    python -m ft_client.upload --file <path>
-    python -m ft_client.upload --validation <path>   # also upload eval.jsonl
+    python -m src.ft_client.openai.upload                    # default: data/out/train.jsonl
+    python -m src.ft_client.openai.upload --file <path>
+    python -m src.ft_client.openai.upload --validation <path>   # also upload eval.jsonl
 """
 
 from __future__ import annotations
@@ -22,7 +22,8 @@ try:
 except ImportError:
     load_dotenv = None
 
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 4 уровня выше (openai/ → ft_client/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 def upload_one(client, path: Path, purpose: str) -> str:
@@ -36,13 +37,13 @@ def upload_one(client, path: Path, purpose: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Upload JSONL to OpenAI Files API")
     ap.add_argument("--file", type=Path,
-                    default=ROOT / "dataset" / "train.jsonl",
+                    default=ROOT / "data" / "out" / "train.jsonl",
                     help="Path to training JSONL")
     ap.add_argument("--validation", type=Path, default=None,
                     help="Optional validation JSONL (eval.jsonl)")
     ap.add_argument("--purpose", default="fine-tune")
     ap.add_argument("--save-ids", type=Path,
-                    default=ROOT / "ft_client" / "last_upload.json",
+                    default=ROOT / "src" / "ft_client" / "last_upload.json",
                     help="Where to persist file_ids for create_job.py")
     args = ap.parse_args()
 
@@ -80,7 +81,7 @@ def main() -> int:
     payload = {"training_file": train_id, "validation_file": val_id}
     args.save_ids.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"\nSaved ids -> {args.save_ids}")
-    print("Next: python -m ft_client.create_job --confirm")
+    print("Next: python -m src.ft_client.openai.create_job --confirm")
     return 0
 
 

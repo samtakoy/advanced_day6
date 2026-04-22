@@ -7,9 +7,25 @@ __pycache__/
 *.pyo
 *.pyd
 .tasks/
-dataset/synthetic_raw.jsonl
-baseline/outputs/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+
+# Генерируемые артефакты датасета (пересобираются через mix_and_split)
+data/out/
+
+# Сырая синтетика (до валидации)
+data/synthetic_raw.jsonl
+
+# Baseline outputs (генерируются через run_baseline)
+src/baseline/outputs/
+src/baseline/outputs_*/
+
+# MLX fine-tuning артефакты (тяжёлые, не коммитим)
+adapters/
+fused_model/
+mlx_data/
+
+# OpenAI FT state (содержит file IDs и job IDs)
+src/ft_client/last_*.json

@@ -12,9 +12,9 @@ Stratified split keeps per-mode proportions (agent / agent_question / plain)
 balanced in both splits.
 
 Usage:
-    python -m dataset.mix_and_split
-    python -m dataset.mix_and_split --eval-ratio 0.2 --seed 42
-    python -m dataset.mix_and_split --skip-validate   # trust inputs
+    python -m src.dataset.mix_and_split
+    python -m src.dataset.mix_and_split --eval-ratio 0.2 --seed 42
+    python -m src.dataset.mix_and_split --skip-validate   # trust inputs
 """
 
 from __future__ import annotations
@@ -26,11 +26,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 3 уровня выше (dataset/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from validator.validate import (  # noqa: E402
+from src.validator.validate import (  # noqa: E402
     check_semantic,
     check_structural,
     detect_mode,
@@ -123,14 +124,14 @@ def summarize(rows: list[dict], label: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Mix seeds+synthetic and split 80/20")
     ap.add_argument("--seeds-dir", type=Path,
-                    default=Path(__file__).resolve().parent / "seeds")
+                    default=ROOT / "data" / "seeds")
     ap.add_argument("--synthetic-dir", type=Path,
-                    default=Path(__file__).resolve().parent / "synthetic")
+                    default=ROOT / "data" / "synthetic")
     ap.add_argument("--out-train", type=Path,
-                    default=Path(__file__).resolve().parent / "train.jsonl")
+                    default=ROOT / "data" / "out" / "train.jsonl")
     ap.add_argument("--out-eval", type=Path,
-                    default=Path(__file__).resolve().parent / "eval.jsonl")
-    ap.add_argument("--contracts", type=Path, default=ROOT / "contracts")
+                    default=ROOT / "data" / "out" / "eval.jsonl")
+    ap.add_argument("--contracts", type=Path, default=ROOT / "data" / "contracts")
     ap.add_argument("--eval-ratio", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--skip-validate", action="store_true")

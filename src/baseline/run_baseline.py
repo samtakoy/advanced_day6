@@ -11,10 +11,10 @@ For each selected seed:
 This is the point-of-reference we compare against AFTER fine-tune.
 
 Usage:
-    python -m baseline.run_baseline --dry-run      # no API calls, show plan
-    python -m baseline.run_baseline                # hits OpenAI, requires OPENAI_API_KEY
-    python -m baseline.run_baseline --limit 3      # only first 3 seeds
-    python -m baseline.run_baseline --modes agent  # filter modes (agent,agent_question,plain)
+    python -m src.baseline.run_baseline --dry-run      # no API calls, show plan
+    python -m src.baseline.run_baseline                # hits OpenAI, requires OPENAI_API_KEY
+    python -m src.baseline.run_baseline --limit 3      # only first 3 seeds
+    python -m src.baseline.run_baseline --modes agent  # filter modes (agent,agent_question,plain)
 """
 
 from __future__ import annotations
@@ -28,11 +28,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 3 уровня выше (baseline/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from validator.validate import ALLOWED_TOOL_NAMES, detect_mode  # noqa: E402
+from src.validator.validate import ALLOWED_TOOL_NAMES, detect_mode  # noqa: E402
 
 
 @dataclass
@@ -150,11 +151,11 @@ def call_api(client, model: str, messages: list[dict], tools: list[dict],
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run gpt-4o-mini baseline on seeds")
-    ap.add_argument("--seeds", type=Path, default=ROOT / "dataset" / "seeds")
+    ap.add_argument("--seeds", type=Path, default=ROOT / "data" / "seeds")
     ap.add_argument("--from-jsonl", type=Path, default=None,
                     help="Load examples from a JSONL file (e.g. dataset/eval.jsonl). "
                          "Overrides --seeds when given.")
-    ap.add_argument("--contracts", type=Path, default=ROOT / "contracts")
+    ap.add_argument("--contracts", type=Path, default=ROOT / "data" / "contracts")
     ap.add_argument("--out-dir", type=Path,
                     default=Path(__file__).resolve().parent / "outputs")
     ap.add_argument("--model", default="gpt-4o-mini",
@@ -166,9 +167,9 @@ def main() -> int:
                     help="Only run on the first N seeds (after mode filter)")
     ap.add_argument("--dry-run", action="store_true",
                     help="Do not hit the API; just print what would be sent")
-    ap.add_argument("--provider", choices=["auto", "openai", "openrouter"], default="auto",
+    ap.add_argument("--provider", choices=["auto", "openai", "openrouter", "ollama"], default="auto",
                     help="Which provider to use. 'auto' picks OpenRouter if OPENROUTER_API_KEY "
-                         "is set, else OpenAI.")
+                         "is set, else OpenAI. 'ollama' uses local Ollama on localhost:11434.")
     args = ap.parse_args()
 
     # Load .env if present
@@ -179,11 +180,22 @@ def main() -> int:
         pass
 
     # Resolve provider, key, base_url, and adjusted model name
+    # Поддерживаемые провайдеры:
+    #   openai     — напрямую через OpenAI API
+    #   openrouter — через OpenRouter (единый ключ на все модели)
+    #   ollama     — локальная модель через Ollama (OpenAI-compat API на localhost:11434)
+    #   auto       — openrouter если есть ключ, иначе openai
     provider = args.provider
     if provider == "auto":
         provider = "openrouter" if os.getenv("OPENROUTER_API_KEY") else "openai"
 
-    if provider == "openrouter":
+    if provider == "ollama":
+        # Ollama предоставляет OpenAI-совместимый API на localhost:11434/v1.
+        # API key не нужен — ставим заглушку, т.к. openai SDK требует непустую строку.
+        api_key = "ollama"
+        base_url = "http://localhost:11434/v1"
+        model = args.model
+    elif provider == "openrouter":
         api_key = os.getenv("OPENROUTER_API_KEY")
         base_url = "https://openrouter.ai/api/v1"
         # OpenRouter requires a vendor prefix in the model name
@@ -242,7 +254,7 @@ def main() -> int:
         print(f"\n--- {seed_name}  mode={mode}  n_prompt_msgs={len(prompt_msgs)} ---")
 
         if args.dry_run:
-            resolved_model = args.model if "/" in args.model or provider == "openai" else f"openai/{args.model}"
+            resolved_model = args.model if ("/" in args.model or provider in ("openai", "ollama")) else f"openai/{args.model}"
             print(f"  would call {resolved_model} via {provider} with {len(tools)} tools, "
                   f"system+user prefix, temperature={args.temperature}")
             continue

@@ -4,8 +4,8 @@
 Useful as the final "is the dataset ready?" check before fine-tune.
 
 Usage:
-    python -m dataset.summarize
-    python -m dataset.summarize --train dataset/train.jsonl --eval dataset/eval.jsonl
+    python -m src.dataset.summarize
+    python -m src.dataset.summarize --train data/out/train.jsonl --eval data/out/eval.jsonl
 """
 
 from __future__ import annotations
@@ -62,10 +62,11 @@ def summarize_file(path: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ROOT = Path(__file__).resolve().parent.parent.parent
     ap.add_argument("--train", type=Path,
-                    default=Path(__file__).resolve().parent / "train.jsonl")
+                    default=ROOT / "data" / "out" / "train.jsonl")
     ap.add_argument("--eval", type=Path,
-                    default=Path(__file__).resolve().parent / "eval.jsonl")
+                    default=ROOT / "data" / "out" / "eval.jsonl")
     args = ap.parse_args()
 
     for label, p in (("TRAIN", args.train), ("EVAL", args.eval)):

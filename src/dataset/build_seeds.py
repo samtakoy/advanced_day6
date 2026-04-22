@@ -6,9 +6,9 @@ validates each through validator checks, strips _meta, writes one compact
 JSON per line to the output JSONL file.
 
 Usage:
-    python -m dataset.build_seeds                    # defaults
-    python -m dataset.build_seeds --out out.jsonl
-    python -m dataset.build_seeds --skip-validate    # trust the sources
+    python -m src.dataset.build_seeds                    # defaults
+    python -m src.dataset.build_seeds --out out.jsonl
+    python -m src.dataset.build_seeds --skip-validate    # trust the sources
 
 Exits 1 if any seed is invalid or unparseable.
 """
@@ -20,12 +20,12 @@ import json
 import sys
 from pathlib import Path
 
-# Make validator importable when run as a module or script
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 3 уровня выше (dataset/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from validator.validate import (  # noqa: E402
+from src.validator.validate import (  # noqa: E402
     check_semantic,
     check_structural,
     detect_mode,
@@ -37,17 +37,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Flatten seed .json files into JSONL")
     ap.add_argument(
         "--in", dest="input_dir", type=Path,
-        default=Path(__file__).resolve().parent / "seeds",
+        default=ROOT / "data" / "seeds",
         help="Directory with *.json seed files",
     )
     ap.add_argument(
         "--out", type=Path,
-        default=Path(__file__).resolve().parent / "seeds.jsonl",
+        default=ROOT / "data" / "out" / "seeds.jsonl",
         help="Output JSONL path",
     )
     ap.add_argument(
         "--contracts", type=Path,
-        default=ROOT / "contracts",
+        default=ROOT / "data" / "contracts",
         help="Path to contracts directory",
     )
     ap.add_argument("--skip-validate", action="store_true",

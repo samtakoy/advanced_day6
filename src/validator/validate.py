@@ -2,10 +2,10 @@
 """Validator for fine-tune dataset examples.
 
 Usage:
-    python -m validator.validate <path>
-    python -m validator.validate dataset/seeds/
-    python -m validator.validate dataset/train.jsonl
-    python -m validator.validate dataset/seeds/golden_01.json
+    python -m src.validator.validate <path>
+    python -m src.validator.validate data/seeds/
+    python -m src.validator.validate data/out/train.jsonl
+    python -m src.validator.validate data/seeds/golden_01.json
 
 Exit code 0 if no errors, 1 if errors found.
 """
@@ -444,8 +444,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Validate fine-tune dataset examples")
     ap.add_argument("path", type=Path, help="File (.json/.jsonl) or directory of .json files")
     ap.add_argument("--contracts", type=Path,
-                    default=Path(__file__).resolve().parent.parent / "contracts",
-                    help="Path to contracts directory (default: ../contracts)")
+                    default=Path(__file__).resolve().parent.parent.parent / "data" / "contracts",
+                    help="Path to contracts directory")
     ap.add_argument("-q", "--quiet", action="store_true", help="Show only failures")
     args = ap.parse_args()
 

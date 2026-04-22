@@ -6,9 +6,9 @@ meta-prompts from prompts/meta_*.md, validates the response via the validator
 module, and writes passing examples to dataset/synthetic/<slug>.json.
 
 Usage:
-    python -m dataset.gen_synthetic --count 3 --mode agent --type refactor
-    python -m dataset.gen_synthetic --count 30                  # distribute per default quota
-    python -m dataset.gen_synthetic --count 5 --model anthropic/claude-3.5-sonnet
+    python -m src.dataset.gen_synthetic --count 3 --mode agent --type refactor
+    python -m src.dataset.gen_synthetic --count 30                  # distribute per default quota
+    python -m src.dataset.gen_synthetic --count 5 --model anthropic/claude-3.5-sonnet
 
 The script is idempotent: each example gets a unique filename; re-runs add more.
 Invalid generations are retried up to --max-retries with error feedback injected
@@ -29,17 +29,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 3 уровня выше (dataset/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from validator.validate import (  # noqa: E402
+from src.validator.validate import (  # noqa: E402
     check_semantic,
     check_structural,
     detect_mode,
     load_tool_schemas,
 )
-from dataset.scenarios import (  # noqa: E402
+from src.dataset.scenarios import (  # noqa: E402
     DEVELOP, REFACTOR, BUGFIX, RESEARCH, TESTS,
     QUESTION_AXES, PLAIN_TOPICS,
     pick_variation,
@@ -106,8 +107,8 @@ class GenRecord:
 # Prompt assembly
 # ------------------------------------------------------------------
 
-PROMPTS_DIR = ROOT / "prompts"
-SEEDS_DIR = ROOT / "dataset" / "seeds"
+PROMPTS_DIR = ROOT / "data" / "prompts"
+SEEDS_DIR = ROOT / "data" / "seeds"
 
 
 def _compact_seed_for_reference(seed_path: Path, max_chars: int = 8000) -> str:
@@ -480,8 +481,8 @@ def main() -> int:
                     help="Model name. For direct OpenAI, 'gpt-4o'; for OpenRouter use vendor/model "
                          "(e.g. anthropic/claude-3.5-sonnet)")
     ap.add_argument("--provider", choices=["auto", "openai", "openrouter"], default="auto")
-    ap.add_argument("--out-dir", type=Path, default=ROOT / "dataset" / "synthetic")
-    ap.add_argument("--contracts", type=Path, default=ROOT / "contracts")
+    ap.add_argument("--out-dir", type=Path, default=ROOT / "data" / "synthetic")
+    ap.add_argument("--contracts", type=Path, default=ROOT / "data" / "contracts")
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--max-retries", type=int, default=2)
     ap.add_argument("--include-replan-ratio", type=float, default=0.25,

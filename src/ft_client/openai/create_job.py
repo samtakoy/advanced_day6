@@ -5,10 +5,10 @@ Gated behind `--confirm` because fine-tune costs real money. By default runs
 dry-run, prints what it would create, and exits.
 
 Usage:
-    python -m ft_client.create_job                       # dry-run
-    python -m ft_client.create_job --confirm             # really submit
-    python -m ft_client.create_job --model gpt-4o-mini-2024-07-18
-    python -m ft_client.create_job --epochs 3 --suffix kmp-agent
+    python -m src.ft_client.openai.create_job                       # dry-run
+    python -m src.ft_client.openai.create_job --confirm             # really submit
+    python -m src.ft_client.openai.create_job --model gpt-4o-mini-2024-07-18
+    python -m src.ft_client.openai.create_job --epochs 3 --suffix kmp-agent
 """
 
 from __future__ import annotations
@@ -24,8 +24,9 @@ try:
 except ImportError:
     load_dotenv = None
 
-ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_IDS = ROOT / "ft_client" / "last_upload.json"
+# Корень проекта — на 4 уровня выше (openai/ → ft_client/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
+DEFAULT_IDS = ROOT / "src" / "ft_client" / "last_upload.json"
 DEFAULT_MODEL = "gpt-4o-mini-2024-07-18"
 
 
@@ -103,10 +104,10 @@ def main() -> int:
     print(f"\n[OK] created job: {job.id}")
     print(f"     status: {job.status}")
     print(f"     model: {job.model} -> suffix={args.suffix}")
-    print(f"\nTrack with: python -m ft_client.poll {job.id}")
+    print(f"\nTrack with: python -m src.ft_client.openai.poll {job.id}")
 
     # persist job id for convenience
-    out = ROOT / "ft_client" / "last_job.json"
+    out = ROOT / "src" / "ft_client" / "last_job.json"
     out.write_text(json.dumps({"job_id": job.id, "status": job.status}, indent=2),
                    encoding="utf-8")
     return 0

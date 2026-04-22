@@ -3,3 +3,9 @@ anthropic>=0.40.0
 python-dotenv>=1.0.0
 jsonschema>=4.20.0
 numpy>=1.26.0
+
+# Локальный fine-tuning (Apple Silicon) — опциональные зависимости.
+# Установите отдельно, если планируете обучать через MLX:
+#   pip install mlx mlx-lm
+# mlx>=0.20.0
+# mlx-lm>=0.31.0

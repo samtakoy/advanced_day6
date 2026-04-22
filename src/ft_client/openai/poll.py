@@ -2,9 +2,9 @@
 """Poll OpenAI fine-tuning job status until terminal.
 
 Usage:
-    python -m ft_client.poll <job_id>
-    python -m ft_client.poll                 # reads last_job.json
-    python -m ft_client.poll --interval 60
+    python -m src.ft_client.openai.poll <job_id>
+    python -m src.ft_client.openai.poll                 # reads last_job.json
+    python -m src.ft_client.openai.poll --interval 60
 """
 
 from __future__ import annotations
@@ -21,7 +21,8 @@ try:
 except ImportError:
     load_dotenv = None
 
-ROOT = Path(__file__).resolve().parent.parent
+# Корень проекта — на 4 уровня выше (openai/ → ft_client/ → src/ → advanced_day6/)
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
 TERMINAL = {"succeeded", "failed", "cancelled"}
 
 
@@ -31,7 +32,7 @@ def main() -> int:
     ap.add_argument("--interval", type=int, default=30,
                     help="Seconds between polls (default 30)")
     ap.add_argument("--job-file", type=Path,
-                    default=ROOT / "ft_client" / "last_job.json")
+                    default=ROOT / "src" / "ft_client" / "last_job.json")
     args = ap.parse_args()
 
     if load_dotenv:
