@@ -1,0 +1,177 @@
+[
+  {
+    "seed": "eval_01_agent",
+    "mode": "agent",
+    "first_tool": "read_file",
+    "all_tools": [
+      "read_file"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": " Почемучто проблема связана с `contentPadding` в `LazyColumn`, но без конкретных строк кода трудно точно определить, что именно нужно изменить. Однако, я могу предложить план действий для исправления ",
+    "tokens_in": 2365,
+    "tokens_out": 220,
+    "error": null
+  },
+  {
+    "seed": "eval_02_agent",
+    "mode": "agent",
+    "first_tool": "list_dir",
+    "all_tools": [
+      "list_dir",
+      "read_file"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": false,
+    "content_preview": " Почемучто для выполнения задачи нужно сначала убедиться, что файл `build.gradle.kts` существует и открыт для редактирования. Затем я добавлю зависимость `kotlinx-serialization-json` в раздел `commonM",
+    "tokens_in": 1898,
+    "tokens_out": 117,
+    "error": null
+  },
+  {
+    "seed": "eval_03_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": "",
+    "tokens_in": 2379,
+    "tokens_out": 356,
+    "error": null
+  },
+  {
+    "seed": "eval_04_agent",
+    "mode": "agent",
+    "first_tool": "read_file",
+    "all_tools": [
+      "read_file"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": " Почемучто для добавления поддержки wasmJs таргета в `build.gradle.kts` файл модуля `core-features/stocks`, мне нужно сначала прочитать текущее содержимое файла, чтобы понять структуру и добавить необ",
+    "tokens_in": 2356,
+    "tokens_out": 146,
+    "error": null
+  },
+  {
+    "seed": "eval_05_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": "",
+    "tokens_in": 2397,
+    "tokens_out": 268,
+    "error": null
+  },
+  {
+    "seed": "eval_06_agent",
+    "mode": "agent",
+    "first_tool": "read_file",
+    "all_tools": [
+      "read_file"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": false,
+    "content_preview": " Почемучто проблема связана с `contentPadding` в `LazyColumn`, нужно открыть файл `feature-settings/QuotesScreen.kt` для анализа текущего состояния этого компонента и найти, как именно настроен `conte",
+    "tokens_in": 2365,
+    "tokens_out": 101,
+    "error": null
+  },
+  {
+    "seed": "eval_07_agent_question",
+    "mode": "agent_question",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": " Почемучто задача звучит очень широко и не конкретизировано. Не могу создать план без деталей: какие именно файлы или части проекта нужно перенести? В какой папке Voyager они будут храниться? Пожалуйс",
+    "tokens_in": 2351,
+    "tokens_out": 204,
+    "error": null
+  },
+  {
+    "seed": "eval_08_plain",
+    "mode": "plain",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": false,
+    "content_preview": "Когда вы работаете с Compose Multiplatform, ключевым аспектом является разделение UI на платформо-специфические (`platform-specific`) и общие компоненты. Вот несколько рекомендаций по этому поводу:  1",
+    "tokens_in": 1474,
+    "tokens_out": 831,
+    "error": null
+  },
+  {
+    "seed": "eval_09_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": " Почемучто задача не содержит деталей, таких как конкретные пути файлов или существующие конфигурации? Давай начнем с предположений: предположим, что у нас есть проект на Kotlin Multiplatform и нам ну",
+    "tokens_in": 2352,
+    "tokens_out": 504,
+    "error": null
+  },
+  {
+    "seed": "eval_10_agent_question",
+    "mode": "agent_question",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": " Почемучто для выполнения этой задачи мне нужно сначала понять текущее состояние метода `getLatestNews` и его место в структуре проекта. Я начну с того, что создам план действий, который будет включат",
+    "tokens_in": 2379,
+    "tokens_out": 460,
+    "error": null
+  },
+  {
+    "seed": "eval_11_agent",
+    "mode": "agent",
+    "first_tool": "list_dir",
+    "all_tools": [
+      "list_dir"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": " Почемучто задача требует аудита, но не изменений в коде, значит первым делом нужно составить план для поиска и документирования таких классов.  Для начала, мне нужно понять структуру проекта и найти ",
+    "tokens_in": 2405,
+    "tokens_out": 257,
+    "error": null
+  }
+]

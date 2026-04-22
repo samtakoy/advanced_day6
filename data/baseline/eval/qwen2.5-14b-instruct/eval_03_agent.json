@@ -1,0 +1,36 @@
+{
+  "seed": "eval_03_agent",
+  "mode": "agent",
+  "provider": "ollama",
+  "model": "qwen2.5:14b-instruct",
+  "temperature": 0.3,
+  "input_messages": [
+    {
+      "role": "system",
+      "content": "Ты KMP-агент-исполнитель. Твоя работа — решать задачи по Kotlin Multiplatform проекту, соблюдая строгий пошаговый workflow.\n\n# Инструменты\n\n## State tools — управление твоим планом задачи\n- **plan_write**(task_id, goal, steps) — создать план. Вызывается ПЕРВЫМ на новой задаче.\n- **step_read**(task_id, step_n) — прочитать спецификацию шага. Вызывается ПЕРЕД каждым действием.\n- **step_update_result**(task_id, step_n, status, result, notes?) — зафиксировать исход шага. Статусы: DONE / FAILED / NEEDS_REPLAN.\n- **task_status**(task_id) — получить общий статус задачи. Редко, только при дезориентации.\n- **plan_revise**(task_id, from_step, new_tail) — переписать хвост плана после NEEDS_REPLAN.\n\n## Project tools — работа с кодом\n- **read_file**(path) — прочитать файл проекта.\n- **list_dir**(path) — список файлов в папке.\n- **search_and_replace**(path, old_text, new_text) — точечная замена в существующем файле; возвращает matches. Если matches=0 — старый текст не найден, НЕ повторяй вызов, переходи к replan.\n- **write_file**(path, content) — создать НОВЫЙ файл или перезаписать существующий. Используй только для новых файлов (тесты, доки, новые source-файлы). Для редактирования существующих — всегда search_and_replace (безопаснее, не затирает соседний код).\n\n# Workflow (жёсткие правила)\n\n1. **Первый ход на новой задаче** — `plan_write`. Минимум 2 шага. Каждый шаг содержит непустой `checklist` и `success_criteria`.\n2. **Перед ЛЮБЫМ действием по шагу** — `step_read` этого шага. Не держи спецификацию в памяти, читай из state.\n3. **В каждом assistant-сообщении** — три элемента:\n   - `THOUGHT:` — 1-3 предложения, что делаешь и почему;\n   - `SELF-CHECK:` — сверка с `checklist` шага (до action — что проверим, после action — что получилось);\n   - ровно один `tool_call`.\n4. **После action по шагу** — `step_update_result`. Не переходи к следующему шагу, пока текущий не закрыт.\n5. **При ошибке** (matches=0, ok=false, пустой ответ, неожиданный контент): не повторяй вызов. Вызови `step_update_result` со статусом NEEDS_REPLAN, затем `plan_revise`.\n6. **Если данных недостаточно** для безопасного `plan_write` — вместо плана напиши в content: `QUESTION: <конкретный уточняющий вопрос>`. Не угадывай отсутствующие детали.\n\n# Запрещено\n\n- Вызывать project tools (read_file, list_dir, search_and_replace) без предварительного `step_read` текущего шага.\n- Пропускать `step_update_result` между шагами.\n- Использовать tool names не из списка выше.\n- Повторять тот же tool_call после ошибки без `plan_revise` между ними.\n- Писать THOUGHT и SELF-CHECK многословно. Коротко, по сути.\n\n# Формат\n\nВ тексте ответа: `THOUGHT: ...` на одной строке, `SELF-CHECK: ...` на следующей. Tool call — через function calling API (в `tool_calls`), не встраивай JSON в content.\n\n# Current session\n\nTASK_ID: t-7343\n\nЭтот `task_id` — уникальный идентификатор текущей задачи, заданный session-контекстом. Используй его в аргументе `task_id` КАЖДОГО вызова state-инструментов (plan_write, step_read, step_update_result, task_status, plan_revise). Не изобретай новые идентификаторы и не оставляй поле пустым. Юзер в своём сообщении task_id не указывает — он всегда приходит через session-контекст.\n"
+    },
+    {
+      "role": "user",
+      "content": "Bug: в feature-quotes модуле ClipboardHelper.kt функция pasteFromClipboard в iosMain возвращает пустую строку, хотя должна брать данные из UIPasteboard. Нужно поправить реализацию."
+    }
+  ],
+  "response": {
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_vvwzp1av",
+        "type": "function",
+        "function": {
+          "name": "plan_write",
+          "arguments": "{\"goal\":\"Исправить функцию pasteFromClipboard в ClipboardHelper.kt, чтобы она корректно получала данные из UIPasteboard на iOS.\",\"steps\":[{\"action_hint\":\"read_file\",\"checklist\":[\"Проверить наличие файла по указанному пути.\",\"Убедиться, что это правильный файл для iosMain.\"],\"goal\":\"Найти и прочитать файл ClipboardHelper.kt для iosMain.\",\"n\":1,\"success_criteria\":\"Файл успешно прочитан и содержимое сохранено.\"},{\"action_hint\":\"search_and_replace\",\"checklist\":[\"Идентифицировать код, отвечающий за получение данных из UIPasteboard.\",\"Проверить наличие ошибок или недостающих импортов.\",\"Применить необходимые изменения для корректной работы функции.\"],\"goal\":\"Найти и исправить проблему в pasteFromClipboard.\",\"n\":2,\"success_criteria\":\"Функция работает правильно и возвращает данные из UIPasteboard.\"},{\"action_hint\":\"read_file\",\"checklist\":[\"Проверить работу pasteFromClipboard на реальном устройстве или эмуляторе iOS.\",\"Убедиться, что функция не вызывает ошибок и возвращает ожидаемые данные.\"],\"goal\":\"Тестировать исправление.\",\"n\":3,\"success_criteria\":\"Функция корректно работает и проходит тесты.\"}],\"task_id\":\"t-7343\"}"
+        }
+      }
+    ],
+    "finish_reason": "tool_calls"
+  },
+  "usage": {
+    "prompt_tokens": 2379,
+    "completion_tokens": 356,
+    "total_tokens": 2735
+  }
+}

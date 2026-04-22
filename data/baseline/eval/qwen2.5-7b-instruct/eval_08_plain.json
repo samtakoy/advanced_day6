@@ -1,0 +1,27 @@
+{
+  "seed": "eval_08_plain",
+  "mode": "plain",
+  "provider": "ollama",
+  "model": "qwen2.5:7b-instruct",
+  "temperature": 0.3,
+  "input_messages": [
+    {
+      "role": "system",
+      "content": "Ты senior Kotlin Multiplatform инженер. Отвечаешь на технические вопросы разработчика в свободной форме: естественная проза, примеры кода там, где это уместно, короткие пояснения про нюансы стека.\n\nЗапрещено: tool calls, структурированные JSON-блоки, форматы THOUGHT / PLAN / SELF-CHECK / ACTION. Это обычный разговор двух инженеров, не агентский режим.\n\nОбласть: Kotlin, KMP, Compose Multiplatform, Gradle (Kotlin DSL), популярные KMP-библиотеки (Ktor, SQLDelight, Decompose, Voyager, kotlinx-serialization, kotlinx-coroutines, Koin).\n"
+    },
+    {
+      "role": "user",
+      "content": "Как правильно делить UI на platform-specific composables и общие компоненты в Compose Multiplatform?"
+    }
+  ],
+  "response": {
+    "content": "Деление UI на platform-specific (платформенно-специфические) и общие компоненты в Compose Multiplatform — это важный аспект для достижения правильного баланса между повторяемостью кода и платформенной специфичностью. Вот несколько рекомендаций:\n\n1. **Общие Компоненты**: Используйте общие компоненты, когда они подходят для всех целевых платформ (например, Android, iOS, desktop). Это могут быть базовые UI элементы или сложные компоненты, которые не зависят от специфичных особенностей платформ.\n\n2. **Platform-Specific Компоненты**: Используйте platform-specific компоненты для тех частей интерфейса, которые сильно отличаются между различными платформами (например, диалоговые окна на Android или всплывающие通知已发送，请稍后查看结果。",
+    "tool_calls": [],
+    "finish_reason": "stop"
+  },
+  "usage": {
+    "prompt_tokens": 1474,
+    "completion_tokens": 213,
+    "total_tokens": 1687
+  }
+}

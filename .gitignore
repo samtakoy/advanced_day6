@@ -19,7 +19,7 @@ data/out/
 data/synthetic_raw.jsonl
 
 # Baseline outputs (генерируются через run_baseline)
-data/baseline/
+# data/baseline/
 
 # MLX fine-tuning артефакты (тяжёлые, не коммитим)
 data/mlx/
