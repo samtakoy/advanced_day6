@@ -25,15 +25,22 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 TERMINAL = {"succeeded", "failed", "cancelled"}
 
+from src.utils import model_slug  # noqa: E402
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Poll an OpenAI fine-tune job")
     ap.add_argument("job_id", nargs="?", default=None)
+    ap.add_argument("--model", default="gpt-4o-mini-2024-07-18",
+                    help="Model name (для поиска job-файла по slug)")
     ap.add_argument("--interval", type=int, default=30,
                     help="Seconds between polls (default 30)")
-    ap.add_argument("--job-file", type=Path,
-                    default=ROOT / "src" / "ft_client" / "last_job.json")
+    ap.add_argument("--job-file", type=Path, default=None,
+                    help="JSON file with job_id (default: last_job_<model-slug>.json)")
     args = ap.parse_args()
+
+    if args.job_file is None:
+        args.job_file = ROOT / "src" / "ft_client" / f"last_job_{model_slug(args.model)}.json"
 
     if load_dotenv:
         load_dotenv(ROOT / ".env")

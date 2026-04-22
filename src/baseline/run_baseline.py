@@ -34,6 +34,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.validator.validate import ALLOWED_TOOL_NAMES, detect_mode  # noqa: E402
+from src.utils import model_slug  # noqa: E402
 
 
 @dataclass
@@ -157,7 +158,7 @@ def main() -> int:
                          "Overrides --seeds when given.")
     ap.add_argument("--contracts", type=Path, default=ROOT / "data" / "contracts")
     ap.add_argument("--out-dir", type=Path,
-                    default=Path(__file__).resolve().parent / "outputs")
+                    default=ROOT / "data" / "baseline")
     ap.add_argument("--model", default="gpt-4o-mini",
                     help="Model name. For OpenRouter the 'openai/' prefix is auto-added if missing.")
     ap.add_argument("--temperature", type=float, default=0.3)
@@ -211,10 +212,12 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    # Auto-switch output dir if reading eval.jsonl and default out-dir is untouched
-    default_out = Path(__file__).resolve().parent / "outputs"
-    if args.from_jsonl and args.out_dir == default_out:
-        args.out_dir = Path(__file__).resolve().parent / f"outputs_{args.from_jsonl.stem}"
+    # Результаты baseline — в data/baseline/<source>/<model-slug>/
+    # Пример: data/baseline/eval/qwen2.5-7b-instruct/
+    default_out = ROOT / "data" / "baseline"
+    if args.out_dir == default_out:
+        source = args.from_jsonl.stem if args.from_jsonl else "seeds"
+        args.out_dir = default_out / source / model_slug(args.model)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     modes = {m.strip() for m in args.modes.split(",") if m.strip()}

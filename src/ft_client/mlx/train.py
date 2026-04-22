@@ -29,6 +29,8 @@ from pathlib import Path
 # Корень проекта — на 4 уровня выше (mlx/ → ft_client/ → src/ → advanced_day6/)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
+from src.utils import model_slug  # noqa: E402
+
 # Модель по умолчанию — Qwen 2.5 7B Instruct.
 # mlx_lm автоматически скачивает её с HuggingFace при первом запуске.
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
@@ -139,12 +141,17 @@ def main() -> int:
                     help=f"Размер батча (default: {DEFAULT_BATCH_SIZE})")
     ap.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE,
                     help=f"Learning rate (default: {DEFAULT_LEARNING_RATE})")
-    ap.add_argument("--adapter-path", type=Path,
-                    default=ROOT / "adapters",
-                    help="Куда сохранить LoRA-адаптер (default: ./adapters)")
+    ap.add_argument("--adapter-path", type=Path, default=None,
+                    help="Куда сохранить LoRA-адаптер (default: data/mlx/<model-slug>/adapters)")
     ap.add_argument("--dry-run", action="store_true",
                     help="Показать команду без запуска")
     args = ap.parse_args()
+
+    # Все MLX-артефакты в data/mlx/<model-slug>/ — рядом с остальными данными.
+    # Пример: data/mlx/qwen2.5-7b-instruct/adapters/
+    slug = model_slug(args.model)
+    if args.adapter_path is None:
+        args.adapter_path = ROOT / "data" / "mlx" / slug / "adapters"
 
     # --- Проверки ---
     if not args.train.is_file():
@@ -165,7 +172,7 @@ def main() -> int:
     tools = load_tool_schemas(args.contracts)
     print(f"  Загружено {len(tools)} tool schemas из {args.contracts}")
 
-    # Используем папку рядом с адаптерами для подготовленных данных
+    # Подготовленные данные рядом с адаптером: mlx_out/<slug>/mlx_data/
     data_dir = args.adapter_path.parent / "mlx_data"
     prepare_data_dir(args.train, args.eval, tools, data_dir)
 

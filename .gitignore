@@ -19,13 +19,10 @@ data/out/
 data/synthetic_raw.jsonl
 
 # Baseline outputs (генерируются через run_baseline)
-src/baseline/outputs/
-src/baseline/outputs_*/
+data/baseline/
 
 # MLX fine-tuning артефакты (тяжёлые, не коммитим)
-adapters/
-fused_model/
-mlx_data/
+data/mlx/
 
 # OpenAI FT state (содержит file IDs и job IDs)
 src/ft_client/last_*.json

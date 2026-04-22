@@ -28,9 +28,9 @@ from pathlib import Path
 # Корень проекта — на 4 уровня выше (mlx/ → ft_client/ → src/ → advanced_day6/)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
+from src.utils import model_slug  # noqa: E402
+
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
-DEFAULT_ADAPTER = ROOT / "adapters"
-DEFAULT_FUSED = ROOT / "fused_model"
 DEFAULT_OLLAMA_NAME = "kmp-agent-ft"
 
 
@@ -186,10 +186,10 @@ def main() -> int:
         description="Экспорт MLX LoRA-адаптера в Ollama (fuse → GGUF → ollama create)")
     ap.add_argument("--model", default=DEFAULT_MODEL,
                     help=f"HuggingFace model ID базовой модели (default: {DEFAULT_MODEL})")
-    ap.add_argument("--adapter", type=Path, default=DEFAULT_ADAPTER,
-                    help=f"Путь к LoRA-адаптеру (default: {DEFAULT_ADAPTER})")
-    ap.add_argument("--fused-path", type=Path, default=DEFAULT_FUSED,
-                    help=f"Куда сохранить fused модель (default: {DEFAULT_FUSED})")
+    ap.add_argument("--adapter", type=Path, default=None,
+                    help="Путь к LoRA-адаптеру (default: data/mlx/<model-slug>/adapters)")
+    ap.add_argument("--fused-path", type=Path, default=None,
+                    help="Куда сохранить fused модель (default: data/mlx/<model-slug>/fused)")
     ap.add_argument("--gguf-path", type=Path, default=None,
                     help="Путь для GGUF файла (default: <fused-path>/model.gguf)")
     ap.add_argument("--ollama-name", default=DEFAULT_OLLAMA_NAME,
@@ -204,6 +204,12 @@ def main() -> int:
                     help="Показать план без выполнения")
     args = ap.parse_args()
 
+    # Все MLX-артефакты в data/mlx/<model-slug>/ — рядом с остальными данными.
+    slug = model_slug(args.model)
+    if args.adapter is None:
+        args.adapter = ROOT / "data" / "mlx" / slug / "adapters"
+    if args.fused_path is None:
+        args.fused_path = ROOT / "data" / "mlx" / slug / "fused"
     if args.gguf_path is None:
         args.gguf_path = args.fused_path / "model.gguf"
 

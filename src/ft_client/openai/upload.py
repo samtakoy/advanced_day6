@@ -25,6 +25,8 @@ except ImportError:
 # Корень проекта — на 4 уровня выше (openai/ → ft_client/ → src/ → advanced_day6/)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
+from src.utils import model_slug  # noqa: E402
+
 
 def upload_one(client, path: Path, purpose: str) -> str:
     print(f"Uploading {path} ({path.stat().st_size} bytes)...")
@@ -42,10 +44,16 @@ def main() -> int:
     ap.add_argument("--validation", type=Path, default=None,
                     help="Optional validation JSONL (eval.jsonl)")
     ap.add_argument("--purpose", default="fine-tune")
-    ap.add_argument("--save-ids", type=Path,
-                    default=ROOT / "src" / "ft_client" / "last_upload.json",
-                    help="Where to persist file_ids for create_job.py")
+    ap.add_argument("--model", default="gpt-4o-mini-2024-07-18",
+                    help="Model name (используется для slug в имени файла)")
+    ap.add_argument("--save-ids", type=Path, default=None,
+                    help="Where to persist file_ids (default: last_upload_<model-slug>.json)")
     args = ap.parse_args()
+
+    # Дефолтный путь включает slug модели — чтобы upload'ы для разных моделей не терялись.
+    if args.save_ids is None:
+        slug = model_slug(args.model)
+        args.save_ids = ROOT / "src" / "ft_client" / f"last_upload_{slug}.json"
 
     if load_dotenv:
         load_dotenv(ROOT / ".env")

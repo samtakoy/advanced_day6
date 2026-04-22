@@ -26,14 +26,16 @@ except ImportError:
 
 # Корень проекта — на 4 уровня выше (openai/ → ft_client/ → src/ → advanced_day6/)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
-DEFAULT_IDS = ROOT / "src" / "ft_client" / "last_upload.json"
 DEFAULT_MODEL = "gpt-4o-mini-2024-07-18"
+
+from src.utils import model_slug  # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Create an OpenAI fine-tuning job")
-    ap.add_argument("--ids-file", type=Path, default=DEFAULT_IDS,
-                    help="JSON file with training_file / validation_file ids")
+    ap.add_argument("--ids-file", type=Path, default=None,
+                    help="JSON file with training_file / validation_file ids "
+                         "(default: last_upload_<model-slug>.json)")
     ap.add_argument("--training-file", default=None,
                     help="Override training_file id")
     ap.add_argument("--validation-file", default=None,
@@ -50,6 +52,11 @@ def main() -> int:
 
     if load_dotenv:
         load_dotenv(ROOT / ".env")
+
+    # Дефолтный путь к ids-файлу включает slug модели — согласован с upload.py.
+    slug = model_slug(args.model)
+    if args.ids_file is None:
+        args.ids_file = ROOT / "src" / "ft_client" / f"last_upload_{slug}.json"
 
     train_id = args.training_file
     val_id = args.validation_file
@@ -106,8 +113,8 @@ def main() -> int:
     print(f"     model: {job.model} -> suffix={args.suffix}")
     print(f"\nTrack with: python -m src.ft_client.openai.poll {job.id}")
 
-    # persist job id for convenience
-    out = ROOT / "src" / "ft_client" / "last_job.json"
+    # persist job id for convenience (slug модели в имени — чтобы job'ы разных моделей не терялись)
+    out = ROOT / "src" / "ft_client" / f"last_job_{slug}.json"
     out.write_text(json.dumps({"job_id": job.id, "status": job.status}, indent=2),
                    encoding="utf-8")
     return 0
