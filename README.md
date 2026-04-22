@@ -5,6 +5,14 @@ Python-проект для Дня 6: подготовка датасета (58 J
 Полный план: [`plans/adv_day6_impl_B.md`](plans/adv_day6_impl_B.md)
 Расширение (локальный FT): [`plans/day6_plan_detailed.md`](plans/day6_plan_detailed.md)
 
+## Документация
+
+| Файл | Что внутри |
+|------|-----------|
+| [`docs/EXPLANATION.md`](docs/EXPLANATION.md) | Что это за проект и как он устроен (для новичка) |
+| [`docs/REPORT.md`](docs/REPORT.md) | Отчёт: baseline метрики, результаты FT |
+| [`docs/LOCAL_FINETUNE_TUTORIAL.md`](docs/LOCAL_FINETUNE_TUTORIAL.md) | Пошаговый туториал локального FT на Mac (MLX + Ollama) |
+
 ## Архитектура (кратко)
 
 Модель учится работать со **split tool-контрактом**:

@@ -1,0 +1,168 @@
+[
+  {
+    "seed": "eval_01_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Нужно спланировать чтение файла, поиск и замену параметра contentPadding в компоненте LazyColumn. SELF-CHECK: Запрос ясен, достаточно данных для планирования. ",
+    "tokens_in": 2365,
+    "tokens_out": 300,
+    "error": null
+  },
+  {
+    "seed": "eval_02_agent",
+    "mode": "agent",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Для добавления библиотеки нужно изменить build.gradle.kts файл, затем пересобрать проект и проверить, что библиотека на месте. SELF-CHECK: цель ясна, место изменения (shared/commonMain) тоже.",
+    "tokens_in": 1898,
+    "tokens_out": 331,
+    "error": null
+  },
+  {
+    "seed": "eval_03_agent",
+    "mode": "agent",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Нужно спланировать чтение файла, правку реализации в iOS и проверку изменения. SELF-CHECK: цель ясна, достаточно данных для планирования. ",
+    "tokens_in": 2379,
+    "tokens_out": 323,
+    "error": null
+  },
+  {
+    "seed": "eval_04_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Запрос на добавление поддержки wasmJS в build.gradle.kts файл для модуля core-features/stocks. План из 4 шагов: проверить структуру проекта, прочитать спецификацию build.gradle.kts, добавить ",
+    "tokens_in": 2356,
+    "tokens_out": 426,
+    "error": null
+  },
+  {
+    "seed": "eval_05_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Нужно спланировать чтение файла, замену параметра в нем и запись изменённого содержимого. План из трёх шагов покрывает все требования. SELF-CHECK: задача_claude-stocks_t-4818 на замену параме",
+    "tokens_in": 2397,
+    "tokens_out": 324,
+    "error": null
+  },
+  {
+    "seed": "eval_06_agent",
+    "mode": "agent",
+    "first_tool": "step_read",
+    "all_tools": [
+      "step_read"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Нужно посмотреть структуру Layout в QuotesScreen.kt и убедиться, что краш‑проверка на last item working есть. SELF-CHECK: Имя файла и тип исключения я запомнил из бага. Открываю its body. ",
+    "tokens_in": 2365,
+    "tokens_out": 97,
+    "error": null
+  },
+  {
+    "seed": "eval_07_agent_question",
+    "mode": "agent_question",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Запрос слишком расплывчат – не ясно, что именно переносится и куда, нужен уточняющий вопрос. SELF-CHECK: задача кристаллизация – то, что нужно сделать; from a unclear request to a clear plan.",
+    "tokens_in": 2351,
+    "tokens_out": 132,
+    "error": null
+  },
+  {
+    "seed": "eval_08_plain",
+    "mode": "plain",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": false,
+    "content_preview": "Для понимания процесса и примеров, скажем, что у тебя есть приложение, которое должно работать в Android и iOS. Нужно выбрать моменты, где можно использовать компоненты UI, доступные в общих фичах KMP",
+    "tokens_in": 1474,
+    "tokens_out": 637,
+    "error": null
+  },
+  {
+    "seed": "eval_09_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Запрос содержит две инструкции: (1) добавить плагин, (2) настроить sourceSet. План из трёх шагов покрывает оба действия. SELF-CHECK: задача четко сформулирована — можно составить план. ",
+    "tokens_in": 2352,
+    "tokens_out": 341,
+    "error": null
+  },
+  {
+    "seed": "eval_10_agent_question",
+    "mode": "agent_question",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Запрос одновременно требует сохранить консистентность публичного API и изменить поведение метода. План из 4 шагов: проверить структуру модуля, найти метод, изменить логику, подтвердить совмес",
+    "tokens_in": 2379,
+    "tokens_out": 490,
+    "error": null
+  },
+  {
+    "seed": "eval_11_agent",
+    "mode": "agent",
+    "first_tool": null,
+    "all_tools": [],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Это задача типа research без изменений в исходном коде. План будет состоять из трёх шагов: (1) list_dir каталога core-uikit, (2) read_file каждого файла для поиска guch (grand-sealed-class), ",
+    "tokens_in": 2405,
+    "tokens_out": 196,
+    "error": null
+  }
+]

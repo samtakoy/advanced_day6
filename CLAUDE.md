@@ -25,6 +25,7 @@ advanced_day6/
 │   ├── seeds/                  # hand-crafted examples
 │   ├── synthetic/              # generated examples
 │   └── out/                    # generated artifacts (train.jsonl, eval.jsonl)
+├── docs/                       # документация (EXPLANATION, REPORT, tutorial)
 ├── plans/                      # planning docs
 ├── criteria/                   # eval criteria
 └── requirements.txt

@@ -40,9 +40,14 @@ DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 #   lora-layers=16 — количество слоёв для LoRA-адаптера
 #   batch-size=1   — минимальный батч, экономит RAM
 DEFAULT_ITERS = 600
-DEFAULT_LORA_LAYERS = 16
+# 8 слоёв вместо 16 — экономит ~6GB RAM при обучении.
+# 16 слоёв + max-seq-length 4096 вызывает OOM на 48GB Mac.
+DEFAULT_LORA_LAYERS = 8
 DEFAULT_BATCH_SIZE = 1
 DEFAULT_LEARNING_RATE = 1e-5
+# Наши примеры длинные (до 6000 tokens) — дефолт mlx_lm (2048) обрезает их,
+# что приводит к loss=nan. 8192 покрывает все примеры с запасом.
+DEFAULT_MAX_SEQ_LENGTH = 8192
 
 
 def load_tool_schemas(contracts_dir: Path) -> list[dict]:
@@ -104,12 +109,14 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
         # --mask-prompt: считать loss только по ответу модели (не по промпту).
         # Это стандартная практика для chat fine-tune — мы учим модель генерировать
         # правильные ответы, а не запоминать промпты.
-        "--mask-prompt",
+        # NB: --mask-prompt убран — при truncation обрезанные примеры теряют ответ,
+        # что приводит к loss=nan. Без маски модель учит и промпт, но стабильно.
         "--iters", str(args.iters),
         "--num-layers", str(args.lora_layers),
         "--batch-size", str(args.batch_size),
         "--learning-rate", str(args.learning_rate),
         "--adapter-path", str(args.adapter_path),
+        "--max-seq-length", str(args.max_seq_length),
     ]
 
     # Eval каждые 50 итераций (если есть valid.jsonl)
@@ -141,6 +148,8 @@ def main() -> int:
                     help=f"Размер батча (default: {DEFAULT_BATCH_SIZE})")
     ap.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE,
                     help=f"Learning rate (default: {DEFAULT_LEARNING_RATE})")
+    ap.add_argument("--max-seq-length", type=int, default=DEFAULT_MAX_SEQ_LENGTH,
+                    help=f"Макс. длина последовательности в токенах (default: {DEFAULT_MAX_SEQ_LENGTH})")
     ap.add_argument("--adapter-path", type=Path, default=None,
                     help="Куда сохранить LoRA-адаптер (default: data/mlx/<model-slug>/adapters)")
     ap.add_argument("--dry-run", action="store_true",
