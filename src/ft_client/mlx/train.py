@@ -107,10 +107,9 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
         "--data", str(data_dir),
         "--train",
         # --mask-prompt: считать loss только по ответу модели (не по промпту).
-        # Это стандартная практика для chat fine-tune — мы учим модель генерировать
-        # правильные ответы, а не запоминать промпты.
-        # NB: --mask-prompt убран — при truncation обрезанные примеры теряют ответ,
-        # что приводит к loss=nan. Без маски модель учит и промпт, но стабильно.
+        # --mask-prompt: считать loss только по ответу модели (не по промпту).
+        # См. split_turns.py для альтернативного подхода к multi-turn.
+        "--mask-prompt",
         "--iters", str(args.iters),
         "--num-layers", str(args.lora_layers),
         "--batch-size", str(args.batch_size),
@@ -119,7 +118,14 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
         "--max-seq-length", str(args.max_seq_length),
     ]
 
-    # Eval каждые 50 итераций (если есть valid.jsonl)
+    # Gradient accumulation и checkpointing
+    if args.grad_accum_steps > 1:
+        cmd += ["--grad-accumulation-steps", str(args.grad_accum_steps)]
+    if args.grad_checkpoint:
+        cmd += ["--grad-checkpoint"]
+
+    # Checkpoint и val loss каждые 100 итераций
+    cmd += ["--save-every", "100", "--steps-per-eval", "100"]
     if (data_dir / "valid.jsonl").exists():
         cmd += ["--val-batches", "5"]
 
@@ -150,6 +156,10 @@ def main() -> int:
                     help=f"Learning rate (default: {DEFAULT_LEARNING_RATE})")
     ap.add_argument("--max-seq-length", type=int, default=DEFAULT_MAX_SEQ_LENGTH,
                     help=f"Макс. длина последовательности в токенах (default: {DEFAULT_MAX_SEQ_LENGTH})")
+    ap.add_argument("--grad-accum-steps", type=int, default=1,
+                    help="Gradient accumulation: симулирует больший batch без роста RAM (default: 1)")
+    ap.add_argument("--grad-checkpoint", action="store_true",
+                    help="Gradient checkpointing: экономит ~40%% RAM, замедляет ~20%%")
     ap.add_argument("--adapter-path", type=Path, default=None,
                     help="Куда сохранить LoRA-адаптер (default: data/mlx/<model-slug>/adapters)")
     ap.add_argument("--dry-run", action="store_true",

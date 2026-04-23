@@ -138,24 +138,18 @@
 
 **Сигнал для fine-tune очевиден:** модель физически не пишет ни THOUGHT, ни SELF-CHECK в content — весь семантический «разум» прячется в аргументах. После FT это должно ликвидироваться.
 
-### Baseline на локальных моделях (Ollama, eval.jsonl n=11)
+### Baseline на локальных моделях (Ollama, seeds n=9 agent)
 
-Для выбора базовой модели для локального MLX fine-tune прогнаны три модели:
+Для выбора базовой модели для локального MLX fine-tune прогнаны четыре модели (на seeds):
 
-| Метрика (agent n=8) | qwen2.5:7b-instruct | qwen2.5-coder:7b-instruct | qwen2.5:14b-instruct |
-|---|---|---|---|
-| Первый tool = `plan_write` | **6/8 (75%)** | 0/8 (0%) | 3/8 (37%) |
-| `THOUGHT:` в content | 7/8 (87%) | **8/8 (100%)** | 3/8 (37%) |
-| `SELF-CHECK:` в content | 7/8 (87%) | **8/8 (100%)** | 3/8 (37%) |
-| task_id в state-tool args | **7/8 (87%)** | 0/8 (0%) | 3/8 (37%) |
-| Все tool names валидны | 8/8 (100%) | 8/8 (100%) | 8/8 (100%) |
+| Метрика (agent n=9) | qwen2.5:7b-instruct | qwen2.5-coder:7b | qwen2.5:14b-instruct | qwen2.5:3b |
+|---|---|---|---|---|
+| Первый tool = `plan_write` | **87%** | 0% | 37% | 37% |
+| `THOUGHT:` в content | 12% | 0% | 0% | 0% |
+| `SELF-CHECK:` в content | 12% | 0% | 0% | 0% |
+| task_id в state-tool args | **75%** | 0% | 37% | 37% |
 
-**Выводы:**
-- **7B coder** — пишет THOUGHT/SELF-CHECK идеально, но **ни разу не вызвала tool call** `plan_write`. Весь план пишет в content, не понимает tool calling протокол. FT должен будет учить tool calling с нуля.
-- **14B instruct** — 37% по всем метрикам. Часто прыгает к `read_file`/`list_dir` вместо `plan_write`. Пишет "Почемучто..." вместо `THOUGHT:`. Плюс QLoRA на 14B рискует не влезть в 48GB RAM.
-- **7B instruct** — лучший баланс: уже на 75-87% следует протоколу, FT дожмёт до 95%+. Безопасно по RAM (~10GB peak).
-
-**Выбор для FT: `qwen2.5:7b-instruct`** (основной), `qwen2.5-coder:7b-instruct` (второй прогон для сравнения).
+**Выбор для FT: `qwen2.5:3b-instruct`** — максимальный gap до идеала (есть что улучшать), комфортный по RAM (peak ~29GB при QLoRA).
 
 Результаты сохранены в `data/baseline/eval/<model-slug>/`.
 
@@ -233,16 +227,71 @@
 
 ---
 
-## 8. Локальное обучение (MLX)
+## 8. Локальное обучение (MLX) — результаты
 
-Помимо OpenAI API, проект поддерживает **локальный fine-tuning на Mac Apple Silicon** через MLX:
+### Выбор модели
 
-- **Модель**: Qwen 2.5 7B Instruct (HF: `Qwen/Qwen2.5-7B-Instruct`), ~8-10 GB peak RAM при QLoRA
-- **Датасет переносим на 100%** — `mlx_lm` v0.31+ нативно поддерживает OpenAI chat format с `tool_calls`
-- **Бэкенд**: `src/ft_client/mlx/train.py` (обучение) + `src/ft_client/mlx/export.py` (merge → GGUF → Ollama)
-- **Eval**: `src/baseline/run_baseline.py --provider ollama --model kmp-agent-ft`
+Из четырёх кандидатов выбрана **Qwen 2.5 3B Instruct** — достаточно маленькая для обучения на 48GB Mac (peak ~29GB), с заметным gap до идеала по plan_write (12% baseline → есть что улучшать).
 
-OpenAI-скрипты (`src/ft_client/openai/`) остаются рабочими для cross-проверки.
+### Подходы к обучению
+
+Проведено несколько серий экспериментов:
+
+| Подход | Описание | Данные |
+|--------|----------|--------|
+| **Multi-turn, без mask** | Полный диалог, loss на всех токенах | 47 примеров (оригинал) |
+| **Sliding window + mask-prompt** | split_turns.py: каждый assistant-ход = отдельный пример, mask-prompt маскирует промпт | 402 примера (split) |
+| **SW + mask + grad-accum** | То же + gradient accumulation 4, lr понижен | 402 примера (split) |
+
+### Результаты на eval.jsonl (n=8 agent примеров, невиденные данные)
+
+| Метрика | Baseline 3B | Multi-turn (no mask) | SW + mask | SW + mask + accum |
+|---------|:-----------:|:--------------------:|:---------:|:-----------------:|
+| plan_write first | 12% (1/8) | **62% (5/8)** | 12% (1/8) | 12% (1/8) |
+| THOUGHT | 100% (8/8) | 100% (8/8) | 100% (8/8) | 87% (7/8) |
+| SELF-CHECK | 100% (8/8) | 100% (8/8) | 100% (8/8) | 87% (7/8) |
+| task_id | 25% (2/8) | **62% (5/8)** | 62% (5/8) | 50% (4/8) |
+
+### Выводы
+
+1. **Лучший подход: multi-turn без mask-prompt.** Простейший вариант дал лучший результат — plan_write 12%→62%, task_id 25%→62%.
+
+2. **THOUGHT и SELF-CHECK уже 100% в baseline** на eval данных — system prompt достаточно хорош для формата, FT тут не добавил ценности.
+
+3. **Sliding window + mask-prompt не помог.** Гипотеза была: раздельное обучение на каждом assistant-ходе с чистыми градиентами даст лучший результат. На практике — plan_write упал до 12% (уровень baseline). Причины:
+   - mlx_lm `--mask-prompt` маскирует до последнего сообщения, а не per-role — упрощённая реализация
+   - 402 split-примера при 400 итерациях = ~1 эпоха — недостаточно
+   - При увеличении итераций переобучение наступает стабильно на iter 300 (val loss растёт)
+
+4. **Gradient accumulation не дал эффекта.** Val loss практически идентичен с accum=4 и без.
+
+5. **Eval проверяет только первый ход.** run_baseline подаёт system + user и смотрит один assistant response. Делает ли модель step_read вторым ходом, соблюдает ли read-before-action — неизвестно. Для полной оценки нужен multi-turn eval loop (подавать tool response обратно и проверять следующий ход).
+
+6. **Результат скромный.** 62% plan_write — улучшение, но далеко от цели ≥90%. Вероятные причины:
+   - 58 примеров — мало для серьёзного FT
+   - 3B модель — ограниченная ёмкость
+   - mlx_lm без per-role masking — loss «размазан» по всем токенам, включая промпты
+   - OpenAI API с правильным per-role masking мог бы дать лучший результат
+
+### Технические параметры лучшего прогона
+
+```
+Модель: Qwen/Qwen2.5-3B-Instruct
+Данные: 47 train (multi-turn, оригинал), tools injected
+Iters: 400, checkpoint iter-200 (минимум val loss)
+Batch: 1, lr: 5e-5, lora-layers: 8
+max-seq-length: 8192
+mask-prompt: НЕТ
+Peak mem: ~29 GB
+```
+
+### Найденные проблемы
+
+Подробно описаны в `CLAUDE.md` и `docs/LOCAL_FINETUNE_TUTORIAL.md`. Ключевые:
+- Anaconda python + MPICH = тихий краш MLX (SIGABRT)
+- Ollama в памяти = OOM при обучении
+- GGUF обязателен для tool calling в Ollama (safetensors теряет template)
+- `--mask-prompt` для multi-turn бесполезен в mlx_lm (маскирует не по ролям)
 
 ---
 

@@ -15,6 +15,7 @@ advanced_day6/
 ├── src/                        # весь исполняемый код
 │   ├── baseline/               # baseline eval (run_baseline.py)
 │   ├── dataset/                # генерация/обработка датасета
+│   │   └── split_turns.py      #   sliding window для multi-turn → single-turn
 │   ├── ft_client/              # fine-tuning бэкенды
 │   │   ├── openai/             #   OpenAI API (upload, create_job, poll)
 │   │   └── mlx/                #   MLX local (train, export)
@@ -22,14 +23,35 @@ advanced_day6/
 ├── data/                       # все данные
 │   ├── contracts/              # tool + artifact JSON schemas
 │   ├── prompts/                # system + meta prompts
-│   ├── seeds/                  # hand-crafted examples
-│   ├── synthetic/              # generated examples
-│   └── out/                    # generated artifacts (train.jsonl, eval.jsonl)
+│   ├── seeds/                  # hand-crafted examples (оригинал)
+│   ├── synthetic/              # generated examples (оригинал)
+│   ├── split/                  # данные после split_turns.py (см. docstring скрипта)
+│   │   ├── seeds/              #   split-версии hand-crafted
+│   │   └── synthetic/          #   split-версии generated
+│   ├── out/                    # generated artifacts (train.jsonl, eval.jsonl)
+│   ├── mlx/                    # артефакты MLX-обучения, по модели
+│   │   └── <model-slug>/       #   e.g. qwen2.5-7b-instruct
+│   │       ├── mlx_data/       #     train.jsonl + valid.jsonl для mlx_lm
+│   │       ├── adapters/       #     LoRA-адаптеры
+│   │       └── fused/          #     merged модель (safetensors)
+│   └── baseline/               # результаты baseline-оценки, по модели
+│       ├── eval/<model-slug>/  #   eval JSON + summary per model
+│       ├── seeds/<model-slug>/ #   eval на seeds per model
+│       └── train/<model-slug>/ #   eval на train per model
 ├── docs/                       # документация (EXPLANATION, REPORT, tutorial)
 ├── plans/                      # planning docs
 ├── criteria/                   # eval criteria
 └── requirements.txt
 ```
+
+### Конвенция `<model-slug>`
+
+Папки `data/mlx/`, `data/baseline/eval/`, `data/baseline/seeds/`, `data/baseline/train/` делятся на подпапки по slug модели. Slug — имя модели в нижнем регистре без провайдера, например:
+- `qwen2.5-7b-instruct` — базовая модель
+- `qwen2.5-3b-instruct` — маленькая модель
+- `qwen2.5-coder-7b-instruct` — coder-вариант
+- `kmp-agent-ft`, `kmp-3b-ft`, `kmp-coder-ft` — fine-tuned модели
+- `gpt-4o-mini` — OpenAI baseline
 
 ## Setup
 
@@ -80,3 +102,20 @@ Examples fall into three modes (detected automatically by the validator):
 ## Language
 
 Project documentation and scenarios are in Russian. Code, variable names, and tool contracts are in English.
+
+## MLX Fine-tuning: важные грабли
+
+### venv обязателен
+**ВСЕГДА** запускать через `source .venv/bin/activate`. Системный Anaconda python содержит MPICH, несовместимый с MLX — вызывает тихий SIGABRT при загрузке модели. Диагностировать сложно: нет traceback, только `exit code -6`.
+
+### Ollama перед обучением
+Перед запуском `mlx.train` убить Ollama (`pkill -f ollama`) — она держит модели в GPU-памяти (15+ GB), что вызывает OOM при обучении.
+
+### --mask-prompt и multi-turn (только MLX)
+`--mask-prompt` в mlx_lm маскирует всё до **последнего** сообщения, а не по ролям. Для multi-turn диалогов это значит: учится только финальный assistant-ход, все предыдущие (включая plan_write) маскируются. Альтернатива: `split_turns.py` — см. docstring скрипта для деталей и статуса. **OpenAI API** эту проблему не имеет — автоматически маскирует по ролям, multi-turn работает из коробки.
+
+### data/out/ — единый выход mix_and_split
+`mix_and_split` перезаписывает `data/out/train.jsonl`. По умолчанию берёт `data/seeds/` и `data/synthetic/`. Для split-данных — явно указывать `--seeds-dir data/split/seeds --synthetic-dir data/split/synthetic`.
+
+### GGUF обязателен для Ollama с tool calling
+Импорт из safetensors (`FROM <папка>`) теряет chat template — модель не поддерживает tool calling. Всегда конвертировать в GGUF и прописывать TEMPLATE в Modelfile явно. Конвертер: `/private/tmp/llama.cpp/convert_hf_to_gguf.py`.

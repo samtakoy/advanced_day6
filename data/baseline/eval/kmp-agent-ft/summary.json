@@ -2,6 +2,38 @@
   {
     "seed": "eval_01_agent",
     "mode": "agent",
+    "first_tool": "read_file",
+    "all_tools": [
+      "read_file"
+    ],
+    "tool_names_valid": true,
+    "has_thought": true,
+    "has_self_check": true,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Запрос明确了需要在`feature-quotes/QuotesScreen.kt`文件中修复LazyColumn的contentPadding问题，使得最后一个元素能够正确显示。首先，我应该读取该文件的内容以了解当前的contentPadding设置。 SELF-CHECK: 需要读取指定文件，检查其内容，并确保找到与contentPadding相关的设置。 ",
+    "tokens_in": 1534,
+    "tokens_out": 106,
+    "error": null
+  },
+  {
+    "seed": "eval_02_agent",
+    "mode": "agent",
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
+    "tool_names_valid": true,
+    "has_thought": false,
+    "has_self_check": false,
+    "has_task_id_in_state_args": true,
+    "content_preview": "",
+    "tokens_in": 1526,
+    "tokens_out": 263,
+    "error": null
+  },
+  {
+    "seed": "eval_03_agent",
+    "mode": "agent",
     "first_tool": "plan_write",
     "all_tools": [
       "plan_write"
@@ -9,38 +41,10 @@
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
-    "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Нужно спланировать чтение файла, поиск и замену параметра contentPadding в компоненте LazyColumn. SELF-CHECK: Запрос ясен, достаточно данных для планирования. ",
-    "tokens_in": 2365,
-    "tokens_out": 300,
-    "error": null
-  },
-  {
-    "seed": "eval_02_agent",
-    "mode": "agent",
-    "first_tool": null,
-    "all_tools": [],
-    "tool_names_valid": true,
-    "has_thought": true,
-    "has_self_check": true,
     "has_task_id_in_state_args": false,
-    "content_preview": "THOUGHT: Для добавления библиотеки нужно изменить build.gradle.kts файл, затем пересобрать проект и проверить, что библиотека на месте. SELF-CHECK: цель ясна, место изменения (shared/commonMain) тоже.",
-    "tokens_in": 1898,
-    "tokens_out": 331,
-    "error": null
-  },
-  {
-    "seed": "eval_03_agent",
-    "mode": "agent",
-    "first_tool": null,
-    "all_tools": [],
-    "tool_names_valid": true,
-    "has_thought": true,
-    "has_self_check": true,
-    "has_task_id_in_state_args": false,
-    "content_preview": "THOUGHT: Нужно спланировать чтение файла, правку реализации в iOS и проверку изменения. SELF-CHECK: цель ясна, достаточно данных для планирования. ",
-    "tokens_in": 2379,
-    "tokens_out": 323,
+    "content_preview": "THOUGHT: Запрос明确了需要修正feature-quotes模块中ClipboardHelper.kt文件内iosMain平台下pasteFromClipboard函数的问题。首先，我应该制定一个计划来解决这个问题。 SELF-CHECK: 检查理解：任务是修复iOS平台上ClipboardHelper.kt的pasteFromClipboard函数，使其从UIPasteboard正确",
+    "tokens_in": 1548,
+    "tokens_out": 337,
     "error": null
   },
   {
@@ -54,9 +58,9 @@
     "has_thought": true,
     "has_self_check": true,
     "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Запрос на добавление поддержки wasmJS в build.gradle.kts файл для модуля core-features/stocks. План из 4 шагов: проверить структуру проекта, прочитать спецификацию build.gradle.kts, добавить ",
-    "tokens_in": 2356,
-    "tokens_out": 426,
+    "content_preview": "THOUGHT: Запрос требует редактирования файла build.gradle.kts, чтобы добавить таргет wasmJs. Перед этим я должен убедиться, что файл существует и его можно открыть для чтения. SELF-CHECK: Нужно выполн",
+    "tokens_in": 1525,
+    "tokens_out": 542,
     "error": null
   },
   {
@@ -69,40 +73,42 @@
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
-    "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Нужно спланировать чтение файла, замену параметра в нем и запись изменённого содержимого. План из трёх шагов покрывает все требования. SELF-CHECK: задача_claude-stocks_t-4818 на замену параме",
-    "tokens_in": 2397,
-    "tokens_out": 324,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Запрос предполагает изменение параметра в нескольких местах, но конкретный файл упомянут только один раз — это `TickerRepositoryImpl.kt`. Без указания на то, меняется ли также интерфейс, план",
+    "tokens_in": 1566,
+    "tokens_out": 406,
     "error": null
   },
   {
     "seed": "eval_06_agent",
     "mode": "agent",
-    "first_tool": "step_read",
+    "first_tool": "read_file",
     "all_tools": [
-      "step_read"
+      "read_file"
     ],
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
-    "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Нужно посмотреть структуру Layout в QuotesScreen.kt и убедиться, что краш‑проверка на last item working есть. SELF-CHECK: Имя файла и тип исключения я запомнил из бага. Открываю its body. ",
-    "tokens_in": 2365,
-    "tokens_out": 97,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Запрос明确了需要在`feature-settings/QuotesScreen.kt`文件中找到并修正LazyColumn的contentPadding问题。首先，我应该读取该文件的内容以定位问题所在。 SELF-CHECK: 任务目标是修复LazyColumn内容填充错误，确保所有项目都能正确显示。计划的第一个步骤是查看文件内容。  ",
+    "tokens_in": 1534,
+    "tokens_out": 101,
     "error": null
   },
   {
     "seed": "eval_07_agent_question",
     "mode": "agent_question",
-    "first_tool": null,
-    "all_tools": [],
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
     "has_task_id_in_state_args": false,
-    "content_preview": "THOUGHT: Запрос слишком расплывчат – не ясно, что именно переносится и куда, нужен уточняющий вопрос. SELF-CHECK: задача кристаллизация – то, что нужно сделать; from a unclear request to a clear plan.",
-    "tokens_in": 2351,
-    "tokens_out": 132,
+    "content_preview": "THOUGHT: Запрос требует переноса всех файлов из текущего модуля в модуль Voyager. Без указания, какой именно модуль это касается (например, shared, feature-xyz), план будет лишь догадкой и может наруш",
+    "tokens_in": 1520,
+    "tokens_out": 528,
     "error": null
   },
   {
@@ -114,9 +120,9 @@
     "has_thought": false,
     "has_self_check": false,
     "has_task_id_in_state_args": false,
-    "content_preview": "Для понимания процесса и примеров, скажем, что у тебя есть приложение, которое должно работать в Android и iOS. Нужно выбрать моменты, где можно использовать компоненты UI, доступные в общих фичах KMP",
+    "content_preview": "Деление UI на платформенно-специфичные (platform-specific) и общие (shared) компоненты — важный аспект при разработке приложений с использованием Compose Multiplatform. Вот несколько рекомендаций:  1.",
     "tokens_in": 1474,
-    "tokens_out": 637,
+    "tokens_out": 858,
     "error": null
   },
   {
@@ -129,10 +135,10 @@
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
-    "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Запрос содержит две инструкции: (1) добавить плагин, (2) настроить sourceSet. План из трёх шагов покрывает оба действия. SELF-CHECK: задача четко сформулирована — можно составить план. ",
-    "tokens_in": 2352,
-    "tokens_out": 341,
+    "has_task_id_in_state_args": false,
+    "content_preview": "THOUGHT: Запрос требует добавить SQLDelight как dependency в feature-settings и настроить sourceSet для схемы. Начну план, указав эти шаги. SELF-CHECK: План должен содержать минимум 2 шага — один для ",
+    "tokens_in": 1521,
+    "tokens_out": 295,
     "error": null
   },
   {
@@ -146,23 +152,25 @@
     "has_thought": true,
     "has_self_check": true,
     "has_task_id_in_state_args": true,
-    "content_preview": "THOUGHT: Запрос одновременно требует сохранить консистентность публичного API и изменить поведение метода. План из 4 шагов: проверить структуру модуля, найти метод, изменить логику, подтвердить совмес",
-    "tokens_in": 2379,
-    "tokens_out": 490,
+    "content_preview": "THOUGHT: Запрос предполагает редактирование существующего кода без изменения внешнего контракта. Это можно сделать с помощью search_and_replace — найду и заменим все случаи, где вызывается getLatestNe",
+    "tokens_in": 1548,
+    "tokens_out": 443,
     "error": null
   },
   {
     "seed": "eval_11_agent",
     "mode": "agent",
-    "first_tool": null,
-    "all_tools": [],
+    "first_tool": "plan_write",
+    "all_tools": [
+      "plan_write"
+    ],
     "tool_names_valid": true,
     "has_thought": true,
     "has_self_check": true,
-    "has_task_id_in_state_args": false,
-    "content_preview": "THOUGHT: Это задача типа research без изменений в исходном коде. План будет состоять из трёх шагов: (1) list_dir каталога core-uikit, (2) read_file каждого файла для поиска guch (grand-sealed-class), ",
-    "tokens_in": 2405,
-    "tokens_out": 196,
+    "has_task_id_in_state_args": true,
+    "content_preview": "THOUGHT: Запрос требует выполнить поиск по проекту на наличие дублированных sealed‑классов Success/Failure/Loading в модуле core-uikit, а затем создать отчёт о найденных классах в docs/result-types-au",
+    "tokens_in": 1574,
+    "tokens_out": 537,
     "error": null
   }
 ]
