@@ -336,3 +336,143 @@ python -m src.baseline.run_baseline --provider ollama --model kmp_extract_ft \
 python -m src.baseline.run_baseline --provider ollama --model qwen2.5:7b-instruct \
   --from-jsonl data/out/eval.jsonl --num-ctx 4096
 ```
+
+---
+
+# Промежуточный эксперимент 4: чистый датасет — исправления и переобучение
+
+**Дата:** 2026-04-23
+**Цель:** проверить эффект от исправления несогласованностей в датасете.
+
+## Что было исправлено
+
+### system.md
+- Убраны `(NEW)` метки из таблицы алиасов
+- Убраны 5 редко используемых алиасов (`m-alerts`, `m-portfolio`, `m-pickers`, `cf-alerts`, `cf-portfolio`, `fa-workspaces`) → модули этих задач уезжают в `newModules`
+- Убран блок «Задачи для dependsOn» (справочник 1-25 + костыль «выше 25»)
+- Исправлено `[0]` → `[1]` в схеме
+- Добавлено поле `newModules` (полные пути модулей вне таблицы)
+- Таблица: 16 алиасов вместо 21
+
+### gold.md
+- 17 задач: убраны неупомянутые модули из `modules` (REMOVE)
+- Все `NEW::` записи мигрированы в `newModules` (без префикса)
+- 5 убранных алиасов → `newModules` с полными путями
+- Добавлено поле `newModules` ко всем 56 задачам
+- 7 дополнительных исправлений по замечаниям стороннего аудита (пропущенные uikit, features-api:chart, theme)
+
+### prose-файлы
+- 15 задач: добавлены естественные упоминания модулей в user-текст
+- 2 задачи: добавлены упоминания dependsOn
+
+### Итог: 0 несогласованностей
+Аудит-скрипт: каждый модуль в gold упомянут в user-тексте, modules = только алиасы, newModules = только полные пути.
+
+## Параметры обучения (Run D)
+
+```
+--iters 200 --batch-size 1 --grad-accum-steps 2 --learning-rate 1e-5
+--max-seq-length 3072 --lora-layers 8
+```
+
+### Val loss
+
+| Iter | Val loss | Train loss |
+|---|---|---|
+| 1 | 0.806 | — |
+| 25 | 0.386 | 0.682 |
+| 50 | 0.349 | 0.382 |
+| 75 | **0.323** | 0.267 |
+| 100 | **0.323** | 0.144 |
+| 125 | 0.336 ↑ | 0.158 |
+| 150 | 0.339 ↑ | 0.094 |
+| 200 | 0.392 ↑ | 0.036 |
+
+Плато на iter 75-100 (val=0.323). Взят **iter 100**.
+
+## Результаты eval (11 примеров)
+
+| Метрика | Qwen 7B base | **kmp_extract_ft** | Изменение |
+|---|---|---|---|
+| JSON parse | 9/11 (82%) | **11/11 (100%)** | **+18%** |
+| type match | 7/9 (78%) | **9/11 (82%)** | +4% |
+| block match | 3/9 (33%) | **8/11 (73%)** | **+40%** |
+| modules IoU | 0.463 | 0.470 | +0.007 |
+| **newMods IoU** | 0.667 | **0.727** | **+0.060** |
+| deps IoU | 0.722 | 0.773 | +0.051 |
+| AC recall | 0.028 | **0.445** | **+0.417** |
+| OoS precision | 0.611 | 0.682 | +0.071 |
+| schema valid | 7/11 (64%) | **11/11 (100%)** | **+36%** |
+| validation errors | 5 | **0** | **-5** |
+| tokens out | 2,863 | **1,647** | **-42%** |
+
+## Анализ modules IoU
+
+modules IoU практически не вырос (0.463 → 0.470). Разбор промахов:
+
+| Пример | IoU | Gold | Predicted | Проблема |
+|---|---|---|---|---|
+| eval_01 | 0.00 | [db, cf-workspaces, mainentry] | [] | Полный пропуск |
+| eval_03 | 0.00 | [uikit] | [cf-experiments] | Неправильный модуль |
+| eval_04 | 0.50 | [m-data, m-analysis, m-main, uikit] | [m-data, m-analysis] | Недоизвлечение |
+| eval_05 | 0.00 | [cf-stocks] | [db] | Перепутан модуль |
+| eval_06 | 0.67 | [db, cf-workspaces, m-main] | [db, cf-workspaces] | Пропуск m-main |
+| eval_07 | 0.50 | [cf-indicators, uikit] | [cf-indicators] | Пропуск uikit |
+| eval_09 | 0.00 | [utils, cf-stocks] | [uikit] | Неправильный модуль |
+| eval_10 | 0.50 | [m-settings, resources] | [m-settings] | Пропуск resources |
+
+**Паттерн: модель недоизвлекает.** Возвращает 1-2 модуля вместо 2-4. Выучила «не выдумывать» (0 ошибок валидации), но перестраховывается.
+
+## Сравнение с предыдущим FT (эксперимент 3, старый датасет)
+
+| Метрика | FT старый датасет | FT чистый датасет |
+|---|---|---|
+| JSON parse | 11/11 | 11/11 |
+| block match | 8/11 (73%) | 8/11 (73%) |
+| modules IoU | **0.667** | 0.470 |
+| schema valid | 10/11 | **11/11** |
+| validation errors | 2 | **0** |
+| AC recall | 0.371 | **0.445** |
+
+modules IoU **упал** с 0.667 до 0.470. Причина: мы убрали подразумеваемые модули из gold — теперь gold строже, а модель пока не научилась извлекать все явно упомянутые.
+
+## Что улучшилось абсолютно
+1. **Schema valid 100%** — 0 ошибок валидации (раньше 2)
+2. **AC recall 0.445** — лучше чем раньше (0.371)
+3. **newModules IoU 0.727** — новое поле работает
+4. **Block match 73%** — огромный скачок с 33% baseline
+5. **Компактность** — 42% меньше токенов
+
+## Возможные следующие шаги
+1. **Augmentation** — перефразировать 10-15 train-примеров для увеличения разнообразия
+2. **Больше эпох с early stopping** — val loss плато на 75-100, может стоит попробовать lr=5e-6 (медленнее, но глубже)
+3. **LLM-as-judge для AC recall** — exact match занижает реальное качество
+4. **Квантизация GGUF** — f16 → q4_K_M для быстрого инференса
+
+## Воспроизведение
+
+```bash
+# Обучение
+pkill -f ollama
+python -m src.ft_client.mlx.train --iters 200 --batch-size 1 --grad-accum-steps 2 \
+  --learning-rate 1e-5 --max-seq-length 3072 \
+  --save-every 25 --steps-per-eval 25 --val-batches 11 \
+  --adapter-path data/mlx/run-d-clean-dataset/adapters
+
+# Экспорт iter 100
+cp data/mlx/run-d-clean-dataset/adapters/0000100_adapters.safetensors \
+   data/mlx/run-d-clean-dataset/adapters/adapters.safetensors
+python -m mlx_lm.fuse --model Qwen/Qwen2.5-7B-Instruct \
+  --adapter-path data/mlx/run-d-clean-dataset/adapters \
+  --save-path data/mlx/qwen2.5-7b-instruct/fused
+python /tmp/llama_cpp_fresh/convert_hf_to_gguf.py \
+  data/mlx/qwen2.5-7b-instruct/fused \
+  --outfile data/mlx/qwen2.5-7b-instruct/fused/model.gguf
+ollama create kmp_extract_ft -f /tmp/Modelfile_extract
+
+# Eval
+python -m src.baseline.run_baseline --provider ollama --model kmp_extract_ft \
+  --from-jsonl data/out/eval.jsonl --num-ctx 4096
+python -m src.baseline.run_baseline --provider ollama --model qwen2.5:7b-instruct \
+  --from-jsonl data/out/eval.jsonl --num-ctx 4096
+```

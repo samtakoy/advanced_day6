@@ -1,28 +1,24 @@
-# Локальный fine-tune на Mac: пошаговый туториал для новичка
+# Локальный fine-tune на Mac: пошаговый туториал
 
-Этот файл — практический дневник: как мы взяли готовую модель Qwen 2.5 7B, обучили её на 47 примерах и импортировали в Ollama. С ошибками, тупиками и решениями.
+Практический дневник: как мы взяли Qwen 2.5 7B, обучили на 45 примерах extraction-задач и импортировали в Ollama. С ошибками, тупиками и решениями.
 
-> **Кому это**: разработчику, который впервые слышит слова MLX, GGUF, LoRA и хочет понять что происходит, а не просто скопировать команды.
+> **Кому это**: разработчику, который впервые слышит слова MLX, GGUF, LoRA и хочет понять что происходит.
 
 ---
 
-## Словарик (без него дальше будет тяжело)
+## Словарик
 
 | Термин | Что это простыми словами |
 |--------|------------------------|
-| **MLX** | Фреймворк от Apple для ML на Apple Silicon. Аналог PyTorch, но оптимизирован под чип M1/M2/M3/M4. Умеет обучать и запускать модели. |
-| **LoRA / QLoRA** | Способ дообучить большую модель, меняя не все 7 миллиардов параметров, а только маленькую "надстройку" (~6 млн параметров). Как наклейка на учебник — книга та же, но с твоими пометками. **QLoRA** = LoRA + квантизация (экономия памяти). |
-| **Адаптер** | Та самая "надстройка" от LoRA. Файл ~25 МБ вместо 15 ГБ всей модели. |
-| **Fuse (слияние)** | Объединить адаптер с оригинальной моделью в одну полную модель. Как вклеить наклейки намертво в книгу. |
-| **GGUF** | Формат файла модели, который понимает Ollama (и llama.cpp под капотом). Как .mp4 для видео — один файл, внутри всё. |
-| **Ollama** | Программа для запуска LLM локально. Как Docker, но для моделей. Скачал → запустил → общаешься через API. |
-| **HuggingFace** | "GitHub для моделей". Хранилище, откуда скачиваются веса моделей. |
-| **Safetensors** | Формат файла весов модели от HuggingFace. Как GGUF, но другой формат. MLX работает с ним, Ollama — нет (нужна конвертация). |
-| **tool calling** | Способность модели не просто отвечать текстом, а вызывать функции (tools). Модель говорит "хочу вызвать plan_write с такими аргументами", а система исполняет. |
-| **mask-prompt** | Настройка обучения: считать ошибку (loss) только по ответам модели, а не по промптам. Модель учится отвечать, а не запоминать вопросы. |
-| **loss** | Число, показывающее "насколько модель ошибается". Чем ниже — тем лучше. NaN = сломалось, модель ничему не учится. |
-| **OOM** | Out of Memory — не хватило оперативной памяти GPU/unified memory. |
-| **truncation** | Обрезка длинных примеров до max-seq-length. Если обрезать слишком много — модель видит вопрос без ответа → loss = NaN. |
+| **MLX** | Фреймворк от Apple для ML на Apple Silicon. Аналог PyTorch, но оптимизирован под M1/M2/M3/M4. |
+| **LoRA / QLoRA** | Способ дообучить модель, меняя не все 7 млрд параметров, а маленькую "надстройку" (~6 млн). Как наклейка на учебник. **QLoRA** = LoRA + квантизация (экономия памяти). |
+| **Адаптер** | "Надстройка" от LoRA. Файл ~25 МБ вместо 15 ГБ всей модели. |
+| **Fuse (слияние)** | Объединить адаптер с моделью в одну. Как вклеить наклейки в книгу. |
+| **GGUF** | Формат модели для Ollama. Как .mp4 для видео — один файл, внутри всё. |
+| **Ollama** | Программа для запуска LLM локально. Как Docker, но для моделей. |
+| **mask-prompt** | Считать loss только по ответам модели, не по промптам. Модель учится отвечать, а не запоминать вопросы. |
+| **loss** | Число «насколько модель ошибается». Чем ниже — тем лучше. |
+| **val loss** | Loss на примерах, которые модель не видела при обучении. Если растёт — переобучение. |
 
 ---
 
@@ -31,305 +27,154 @@
 - Mac с Apple Silicon (M1/M2/M3/M4), минимум 32 ГБ RAM (у нас M4 Max 48 ГБ)
 - Python 3.10+ с virtualenv
 - Ollama (для запуска моделей)
-- Аккаунт на HuggingFace (бесплатный, для скачивания моделей)
-- Наш датасет (47 train + 11 eval примеров в JSONL)
+- Наш датасет (45 train + 11 eval примеров в JSONL)
 
 ---
 
-## Шаг 0. Подготовка окружения
+## Шаг 0. Подготовка
 
 ```bash
-# Создаём изолированное Python-окружение (чтобы не засорять систему)
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Ставим зависимости
 pip install -r requirements.txt
-pip install mlx mlx-lm        # Apple Silicon ML фреймворк
-pip install torch              # нужен для конвертации в GGUF
+pip install mlx mlx-lm
 ```
 
-**Зачем venv?** Без него пакеты ставятся в системный Python (или Anaconda). Когда у тебя 5 проектов с разными версиями библиотек — начинается ад. Venv — изолированная песочница для каждого проекта.
+**Зачем venv?** Системный Python (или Anaconda) может содержать пакеты, несовместимые с MLX (например MPICH вызывает SIGABRT). Venv изолирует окружение.
 
 ---
 
-## Шаг 1. Скачать модель с HuggingFace
+## Шаг 1. Сборка датасета
 
 ```bash
-# Авторизация (нужен токен с huggingface.co/settings/tokens, бесплатно)
-hf auth login
-
-# Скачиваем модель (~15 ГБ, ляжет в ~/.cache/huggingface/)
-hf download Qwen/Qwen2.5-7B-Instruct
+python -m src.dataset.build_dataset
+python -m src.validator.validate
 ```
 
-**Почему Qwen 2.5 7B Instruct?**
-- **7B** (7 миллиардов параметров) — влезает в 48 ГБ RAM при обучении
-- **Instruct** — версия, обученная следовать инструкциям и работать с tool calling
-- Без "instruct" — базовая модель, которая просто продолжает текст, не умеет вести диалог
+Первая команда парсит `data/extraction/gold.md` + prose-файлы → собирает `data/out/train.jsonl` (45 примеров) и `eval.jsonl` (11).
 
-**Почему не 14B?** Мы проверили — при обучении (QLoRA) 7B занимает ~37 ГБ RAM. 14B не влезет.
-
-**Почему не Coder?** Мы прогнали baseline — Coder 7B пишет THOUGHT/SELF-CHECK идеально, но ни разу не вызвала tool call. Она не понимает tool calling протокол. А нам нужно именно это.
+Вторая — проверяет схему, таксономию, дубли, leakage между train/eval.
 
 ---
 
 ## Шаг 2. Baseline — замер "до"
 
-Прежде чем обучать, нужно замерить как модель ведёт себя без обучения. Иначе не с чем сравнивать.
-
 ```bash
 python -m src.baseline.run_baseline \
-  --provider ollama \
-  --model "qwen2.5:7b-instruct" \
-  --from-jsonl data/out/eval.jsonl
+  --provider ollama --model qwen2.5:7b-instruct \
+  --from-jsonl data/out/eval.jsonl --num-ctx 4096
 ```
 
-Скрипт берёт каждый пример из eval.jsonl, отправляет начало диалога (system + user) в модель и смотрит что она ответит. Результаты — в `data/baseline/eval/qwen2.5-7b-instruct/`.
-
-**Наш результат baseline:**
-- plan_write первым: 75% (6/8)
-- THOUGHT в ответе: 87% (7/8)
-- SELF-CHECK в ответе: 87% (7/8)
-
-Неплохо, но не идеально. Цель FT — дожать до 95-100%.
+Отправляет system+user в модель, парсит JSON-ответ, считает метрики. Результаты в `data/baseline/eval/qwen2.5-7b-instruct/`.
 
 ---
 
-## Шаг 3. Подготовка данных для MLX
-
-MLX ожидает папку с `train.jsonl` и `valid.jsonl`. Наш скрипт `train.py` делает это автоматически, но полезно понимать что происходит:
-
-1. Берёт `data/out/train.jsonl` и `data/out/eval.jsonl`
-2. (Опционально) добавляет tool schemas из `data/contracts/tool_schemas.json` в каждую строку
-3. Кладёт результат в `data/mlx/<model-slug>/mlx_data/`
-
-**Проблема, на которую мы наступили: tools раздувают размер**
-
-Каждый пример содержит: system prompt + tools schemas + user message + assistant response. Tools schemas (9 инструментов с описаниями и параметрами) добавляют ~1500 токенов к каждому примеру. При лимите 4096 токенов на пример — это 37% бюджета уходит на одинаковые описания инструментов.
-
-**Решение:** убрать tools из тренировочных данных. Модель и так видит имена tools в system prompt и в tool_calls ответов. Набор tools фиксирован (всегда одни и те же 9), модели не нужно учиться "выбирать по описанию".
-
----
-
-## Шаг 4. Обучение (LoRA fine-tune)
+## Шаг 3. Обучение
 
 ```bash
-python -m mlx_lm.lora \
-  --model Qwen/Qwen2.5-7B-Instruct \
-  --data data/mlx/qwen2.5-7b-instruct/mlx_data \
-  --train \
-  --mask-prompt \
-  --iters 600 \
-  --num-layers 8 \
-  --batch-size 1 \
-  --learning-rate 1e-5 \
-  --adapter-path data/mlx/qwen2.5-7b-instruct/adapters \
-  --max-seq-length 4096 \
-  --val-batches 5
+pkill -f ollama  # освободить GPU
+
+python -m src.ft_client.mlx.train \
+  --iters 200 --batch-size 1 --grad-accum-steps 2 \
+  --learning-rate 1e-5 --max-seq-length 3072 \
+  --save-every 25 --steps-per-eval 25 --val-batches 11
 ```
 
-**Что значит каждый параметр:**
+**Параметры:**
 
 | Параметр | Значение | Зачем |
 |----------|----------|-------|
-| `--model` | HuggingFace ID модели | Какую модель дообучаем |
-| `--data` | Папка с train/valid.jsonl | Данные для обучения |
-| `--train` | — | Режим обучения (а не генерации) |
-| `--mask-prompt` | — | Считать loss только по ответам, не по промптам |
-| `--iters 600` | 600 итераций | ~12 эпох на 47 примерах (47 × 12 ≈ 564) |
-| `--num-layers 8` | 8 LoRA-слоёв | Сколько слоёв модели адаптируем. Больше = лучше качество, но больше RAM |
-| `--batch-size 1` | 1 пример за раз | Минимум, экономит RAM |
-| `--learning-rate 1e-5` | 0.00001 | Скорость обучения. Слишком большая — модель "забудет" базовые знания |
-| `--adapter-path` | Куда сохранить | Путь для LoRA-адаптера |
-| `--max-seq-length 4096` | Макс. длина примера | Примеры длиннее обрезаются |
-| `--val-batches 5` | 5 примеров на валидацию | Каждые N итераций проверяем loss на eval |
+| `--iters 200` | 200 итераций | ~4 эпохи на 45 примерах. Оптимум обычно 75-100 |
+| `--batch-size 1` | 1 пример за раз | Экономит RAM |
+| `--grad-accum-steps 2` | Накопление градиентов | Эффективный batch=2, стабильнее обучение |
+| `--learning-rate 1e-5` | Скорость обучения | 2e-5 переобучается вдвое быстрее |
+| `--max-seq-length 3072` | Макс. длина примера | Самый длинный ~2715 токенов |
+| `--mask-prompt` | (включён по умолчанию) | Loss только по assistant-ответу |
+| `--save-every 25` | Чекпоинт каждые 25 | Можно откатиться к лучшему |
 
 **Как понять что обучение идёт нормально?**
 
-Смотри на строки `Iter N: Train loss X.XXX`:
+Смотрим val loss каждые 25 итераций:
 ```
-Iter  10: Train loss 1.765    ← начало, модель ошибается
-Iter 100: Train loss 0.198    ← учится
-Iter 300: Train loss 0.012    ← почти выучила
-Iter 600: Train loss 0.005    ← готово
+Iter  25: Val loss 0.386    ← падает, хорошо
+Iter  50: Val loss 0.349    ← падает
+Iter  75: Val loss 0.323    ← минимум!
+Iter 100: Val loss 0.323    ← плато
+Iter 125: Val loss 0.336    ← растёт → переобучение
 ```
 
-Loss должен **падать**. Если loss = **nan** — что-то сломалось (см. проблемы ниже).
+Берём чекпоинт с минимальным val loss (iter 75 или 100).
 
-Val loss (на eval данных) тоже должен падать, но может слегка расти к концу — это нормальный лёгкий overfitting.
-
-**Время:** ~40-50 минут на M4 Max для 600 итераций.
+**Время:** ~10-15 минут на M4 Max. Peak RAM: ~25 ГБ.
 
 ---
 
-## Шаг 5. Слияние адаптера с моделью (fuse)
-
-После обучения у нас маленький адаптер (~25 МБ). Чтобы использовать модель — нужно "вклеить" адаптер в оригинал:
+## Шаг 4. Экспорт в Ollama
 
 ```bash
+# Подставить лучший чекпоинт
+cp data/mlx/<run>/adapters/0000100_adapters.safetensors \
+   data/mlx/<run>/adapters/adapters.safetensors
+
+# Fuse (merge адаптера с моделью)
 python -m mlx_lm.fuse \
   --model Qwen/Qwen2.5-7B-Instruct \
-  --adapter-path data/mlx/qwen2.5-7b-instruct/adapters \
+  --adapter-path data/mlx/<run>/adapters \
   --save-path data/mlx/qwen2.5-7b-instruct/fused
+
+# GGUF конвертация
+git clone --depth 1 https://github.com/ggerganov/llama.cpp.git /tmp/llama_cpp_fresh
+python /tmp/llama_cpp_fresh/convert_hf_to_gguf.py \
+  data/mlx/qwen2.5-7b-instruct/fused \
+  --outfile data/mlx/qwen2.5-7b-instruct/fused/model.gguf
+
+# Создать модель в Ollama (с chat template!)
+ollama serve &  # если не запущена
+ollama show qwen2.5:7b-instruct --template  # скопировать template
+# Создать Modelfile с FROM model.gguf + TEMPLATE + stop-токены
+ollama create kmp_extract_ft -f /tmp/Modelfile_extract
 ```
 
-Результат: полная модель в HuggingFace формате (safetensors) в папке `fused/`.
+**Критично:** без TEMPLATE модель теряет chat format и галлюцинирует.
 
 ---
 
-## Шаг 6. Конвертация в GGUF
-
-Ollama не понимает safetensors. Нужно сконвертировать в GGUF:
-
-```bash
-# Нужен конвертер из llama.cpp (одноразовая установка)
-git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /tmp/llama.cpp
-
-# Конвертация (~15 ГБ файл, занимает ~20 секунд)
-python /tmp/llama.cpp/convert_hf_to_gguf.py \
-  data/mlx/qwen2.5-7b-instruct/fused/ \
-  --outfile data/mlx/qwen2.5-7b-instruct/fused/model.gguf \
-  --outtype f16
-```
-
-**Почему не safetensors напрямую?** Ollama умеет импортировать safetensors (`FROM <папка>`), но при этом **теряет chat template** — и модель перестаёт поддерживать tool calling. С GGUF мы можем явно указать template, и Ollama его примет.
-
----
-
-## Шаг 7. Импорт в Ollama
-
-Создаём `Modelfile` — инструкцию для Ollama, как собрать модель:
-
-```
-FROM /path/to/model.gguf
-
-TEMPLATE """...<chat template от Qwen 2.5>..."""
-
-PARAMETER stop "<|im_start|>"
-PARAMETER stop "<|im_end|>"
-```
-
-Chat template — это шаблон, который говорит Ollama как форматировать диалог для модели. **Без него tool calling не работает.** Template берём из оригинальной модели:
-
-```bash
-ollama show qwen2.5:7b-instruct --modelfile
-```
-
-Импортируем:
-```bash
-ollama create kmp-agent-ft -f Modelfile
-```
-
-Проверяем:
-```bash
-ollama list | grep kmp
-# kmp-agent-ft:latest    15 GB    just now
-```
-
----
-
-## Шаг 8. Eval — замер "после"
-
-Прогоняем тот же eval что и в шаге 2, но на обученной модели:
+## Шаг 5. Eval — замер "после"
 
 ```bash
 python -m src.baseline.run_baseline \
-  --provider ollama \
-  --model "kmp-agent-ft" \
-  --from-jsonl data/out/eval.jsonl
+  --provider ollama --model kmp_extract_ft \
+  --from-jsonl data/out/eval.jsonl --num-ctx 4096
 ```
 
-Сравниваем с baseline. Если метрики выросли — fine-tune помог.
+Сравниваем с baseline из шага 2.
 
 ---
 
-## Проблемы, на которые мы наступили (и как решили)
+## Проблемы, на которые мы наступили
 
-### Проблема 1: loss = NaN
+### OOM (Out of Memory)
+- `--batch-size 2` → 33 ГБ, мигание экрана на 48 ГБ Mac
+- **Решение:** `--batch-size 1 --grad-accum-steps 2` — тот же эффективный batch, вдвое меньше RAM
 
-**Симптом:** `Iter 10: Train loss nan` — модель ничему не учится.
+### Модель галлюцинирует после экспорта
+- Ollama: `FROM model.gguf` без TEMPLATE → модель продолжает случайный текст
+- **Решение:** скопировать template из `ollama show qwen2.5:7b-instruct --template` в Modelfile
 
-**Причина:** `--mask-prompt` + длинные примеры. При обрезке (truncation) до max-seq-length от ответа модели ничего не оставалось — весь ответ в "хвосте", который обрезан. Loss считается по пустоте → NaN.
+### GGUF конвертер падает
+- `llama-cpp-python` в pip: конвертер новее пакета `gguf`, падает на `GEMMA4`
+- **Решение:** клонировать свежий `llama.cpp` и использовать его `convert_hf_to_gguf.py`
 
-**Решения (что пробовали):**
-1. Убрать `--mask-prompt` → loss стал числовым, но модель учит и промпты (менее чистое обучение)
-2. Увеличить `--max-seq-length` → OOM (не хватило RAM)
-3. **Сократить system prompt** (с ~800 до ~175 токенов) — помогло частично
-4. **Убрать tools из данных** (~1500 токенов экономии) — помогло, примеры влезли в 4096
+### f16 модель слишком большая
+- GGUF без квантизации: 14 ГБ, Ollama загружает 29 ГБ с KV-кэшем
+- **Решение:** для продакшена — квантизовать в q4_K_M (~4 ГБ)
 
-### Проблема 2: OOM (Out of Memory)
+### Переобучение наступает быстро
+- На 45 примерах оптимум: 75-100 итераций (~2 эпохи)
+- Val loss растёт после iter 125 — модель заучивает примеры
+- **Решение:** частые чекпоинты (`--save-every 25`), брать лучший по val loss
 
-**Симптом:** `[METAL] Command buffer execution failed: Insufficient Memory`
-
-**Причина:** Apple Silicon использует unified memory (общая для CPU и GPU). 7B модель + данные + градиенты = ~37 ГБ. При max-seq-length > 4096 не влезает в 48 ГБ.
-
-**Решения:**
-- `--num-layers 8` вместо 16 (меньше адаптируемых слоёв = меньше RAM)
-- `--max-seq-length 4096` (не больше)
-- `--batch-size 1` (минимум)
-- Закрыть тяжёлые приложения (браузер с 100 вкладками тоже ест RAM)
-
-### Проблема 3: Ollama "does not support tools"
-
-**Симптом:** `kmp-agent-ft does not support tools` при вызове через API.
-
-**Причина:** при импорте модели из safetensors (`FROM <папка>`) Ollama не подхватывает chat template. Ставит дефолтный `{{ .Prompt }}`, который не знает про tools.
-
-**Решение:** конвертировать в GGUF (шаг 6) и указать template явно в Modelfile. При `FROM <файл.gguf>` Ollama принимает пользовательский TEMPLATE.
-
-### Проблема 4: venv не активирован
-
-**Симптом:** `ModuleNotFoundError: No module named 'openai'` — хотя пакет ставили.
-
-**Причина:** пакеты стояли в системном Anaconda, а скрипт запущен из другого Python. Или наоборот.
-
-**Решение:** всегда запускать через `.venv/bin/python` или активировать venv: `source .venv/bin/activate`.
-
-### Проблема 5: результаты разных моделей перезаписывают друг друга
-
-**Симптом:** прогнали baseline на gpt-4o-mini, потом на qwen — файлы gpt-4o-mini исчезли.
-
-**Причина:** выходная папка не зависела от имени модели.
-
-**Решение:** добавили `model_slug()` — функцию, которая превращает имя модели в безопасное имя папки (`Qwen/Qwen2.5-7B-Instruct` → `qwen2.5-7b-instruct`). Теперь каждая модель пишет в свою подпапку.
-
----
-
-## Итоговая структура артефактов
-
-```
-data/
-├── out/                          ← датасет
-│   ├── train.jsonl (47 примеров)
-│   └── eval.jsonl  (11 примеров)
-├── baseline/                     ← результаты baseline
-│   └── eval/
-│       ├── gpt-4o-mini/
-│       ├── qwen2.5-7b-instruct/
-│       └── kmp-agent-ft/         ← post-FT результат
-└── mlx/                          ← артефакты обучения
-    └── qwen2.5-7b-instruct/
-        ├── adapters/             ← LoRA-адаптер (~25 МБ)
-        ├── mlx_data/             ← подготовленные данные
-        └── fused/                ← полная модель + model.gguf
-```
-
----
-
-## Полный пайплайн одной командой (после того как всё настроено)
-
-```bash
-# 1. Подготовить данные и обучить
-python -m src.ft_client.mlx.train
-
-# 2. Экспортировать в Ollama
-python -m src.ft_client.mlx.export
-
-# 3. Прогнать eval
-python -m src.baseline.run_baseline \
-  --provider ollama --model kmp-agent-ft \
-  --from-jsonl data/out/eval.jsonl
-```
-
-В реальности каждый шаг может потребовать подбора параметров и отладки. Этот туториал — как раз про это.
+### max-seq-length 2048 обрезает примеры
+- Qwen tokenizer: русский текст ≈ 1.5x от оценки `len/4`
+- Самый длинный пример: 2715 токенов
+- **Решение:** `--max-seq-length 3072`

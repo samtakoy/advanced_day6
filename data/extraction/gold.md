@@ -88,7 +88,7 @@
   "type": "feat",
   "block": "workspace_foundation",
   "modules": ["cf-stocks"],
-  "newModules": [],
+  "newModules": ["modules:features-api:chart"],
   "dependsOn": [2, 3],
   "acceptanceCriteria": [
     "воркспейс с двумя слотами GAZP/SBER D1 при первом открытии качает и рисует свечи по мере поступления",
@@ -249,7 +249,7 @@
   "title": "Эксперимент: бэктест стратегии индикаторов",
   "type": "feat",
   "block": "analysis",
-  "modules": [],
+  "modules": ["uikit"],
   "newModules": [],
   "dependsOn": [6, 8, 10],
   "acceptanceCriteria": [
@@ -340,7 +340,7 @@
   "title": "Батч-прогон эксперимента + сравнение прогонов",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": [],
+  "modules": ["uikit"],
   "newModules": [],
   "dependsOn": [5, 10, 11],
   "acceptanceCriteria": [
@@ -409,7 +409,7 @@
   "title": "Watchlist — избранные тикеры с последними ценами",
   "type": "feat",
   "block": "breadth",
-  "modules": ["m-main", "m-data"],
+  "modules": ["m-main", "m-data", "uikit"],
   "newModules": [],
   "dependsOn": [2, 3, 4, 5, 13],
   "acceptanceCriteria": [
@@ -455,8 +455,8 @@
   "title": "Portfolio — учёт позиций и P&L",
   "type": "feat",
   "block": "breadth",
-  "modules": ["fa-pickers"],
-  "newModules": ["modules:core:core-features:portfolio", "modules:features:portfolio"],
+  "modules": ["fa-pickers", "uikit"],
+  "newModules": ["modules:core:core-features:portfolio"],
   "dependsOn": [2, 5],
   "acceptanceCriteria": [
     "smoke: SBER Long 100 @ 250 → unrealized PnL по текущей свече",
@@ -900,7 +900,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["theme", "m-settings", "m-main"],
-  "newModules": [],
+  "newModules": ["modules:features-api:chart"],
   "dependsOn": [],
   "acceptanceCriteria": [
     "выбрать preset 'high-contrast' в settings → график и UI поменяли цвета без перезапуска",
@@ -922,7 +922,7 @@
   "title": "i18n — вынос строк в resources + английская локаль",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": ["resources", "utils", "m-main", "m-data", "m-settings"],
+  "modules": ["resources", "theme", "utils", "m-main", "m-data", "m-settings"],
   "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
