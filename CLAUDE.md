@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Fine-tune dataset pipeline for a KMP (Kotlin Multiplatform) state-machine agent. The project generates, validates, and manages a 58-example JSONL dataset used to fine-tune LLMs on agent discipline format. Supports two FT backends: **OpenAI API** (`gpt-4o-mini`) and **local MLX** (Qwen 2.5 on Mac Apple Silicon). The agent learns a **split tool-contract**: 5 state tools (`plan_write`, `step_read`, `step_update_result`, `task_status`, `plan_revise`) for managing its own plan, and 4 project tools (`read_file`, `list_dir`, `search_and_replace`, `write_file`) for code changes.
+Fine-tune dataset pipeline for a **task extraction** model. The project builds, validates, and manages a 56-example JSONL dataset used to fine-tune LLMs on extracting structured task JSON from free-form descriptions of KMP (Kotlin Multiplatform) project tasks. Supports two FT backends: **OpenAI API** (`gpt-4o-mini`) and **local MLX** (Qwen 2.5 on Mac Apple Silicon).
 
-FT goal: teach discipline (THOUGHT + SELF-CHECK markers, read-before-action, replan-on-error), not domain knowledge. The same dataset works for both OpenAI and local models.
+FT goal: teach the model to extract `title`, `type`, `block`, `modules`, `dependsOn`, `acceptanceCriteria`, `outOfScope` from a Slack-like task description — using project-specific taxonomy of 21 module aliases and 6 roadmap blocks. The key metric is `modules IoU` — baseline models confuse module names with class/package names without domain-specific training.
 
 ## Project Structure
 
@@ -14,44 +14,43 @@ FT goal: teach discipline (THOUGHT + SELF-CHECK markers, read-before-action, rep
 advanced_day6/
 ├── src/                        # весь исполняемый код
 │   ├── baseline/               # baseline eval (run_baseline.py)
-│   ├── dataset/                # генерация/обработка датасета
-│   │   └── split_turns.py      #   sliding window для multi-turn → single-turn
+│   ├── dataset/                # сборка датасета из gold.md → JSONL
+│   │   └── build_dataset.py    #   gold.md + prose → train.jsonl + eval.jsonl
 │   ├── ft_client/              # fine-tuning бэкенды
 │   │   ├── openai/             #   OpenAI API (upload, create_job, poll)
 │   │   └── mlx/                #   MLX local (train, export)
-│   └── validator/              # валидация JSONL
+│   └── validator/              # валидация extraction JSONL
 ├── data/                       # все данные
-│   ├── contracts/              # tool + artifact JSON schemas
-│   ├── prompts/                # system + meta prompts
-│   ├── seeds/                  # hand-crafted examples (оригинал)
-│   ├── synthetic/              # generated examples (оригинал)
-│   ├── split/                  # данные после split_turns.py (см. docstring скрипта)
-│   │   ├── seeds/              #   split-версии hand-crafted
-│   │   └── synthetic/          #   split-версии generated
+│   ├── extraction/             # source-of-truth для датасета
+│   │   ├── system.md           #   system prompt (единый для всех примеров)
+│   │   ├── gold.md             #   56 gold-JSON с маркерами [TRAIN]/[EVAL]
+│   │   ├── tasks1_prose.md     #   прозаические user-входы для задач 1-25
+│   │   ├── tasks2.md           #   user-входы для задач 26-50
+│   │   └── tasks_adversarial.md #  adversarial user-входы для задач 51-56
 │   ├── out/                    # generated artifacts (train.jsonl, eval.jsonl)
 │   ├── mlx/                    # артефакты MLX-обучения, по модели
 │   │   └── <model-slug>/       #   e.g. qwen2.5-7b-instruct
 │   │       ├── mlx_data/       #     train.jsonl + valid.jsonl для mlx_lm
 │   │       ├── adapters/       #     LoRA-адаптеры
 │   │       └── fused/          #     merged модель (safetensors)
-│   └── baseline/               # результаты baseline-оценки, по модели
-│       ├── eval/<model-slug>/  #   eval JSON + summary per model
-│       ├── seeds/<model-slug>/ #   eval на seeds per model
-│       └── train/<model-slug>/ #   eval на train per model
-├── docs/                       # документация (EXPLANATION, REPORT, tutorial)
+│   └── baseline/               # результаты baseline-оценки
+│       └── eval/<model-slug>/  #   eval JSON + summary per model
+├── docs/                       # документация
 ├── plans/                      # planning docs
 ├── criteria/                   # eval criteria
 └── requirements.txt
 ```
 
+### Source of truth
+
+Содержание датасета живёт в markdown — не в JSONL. JSONL-файлы перегенерируются из markdown одной командой (`build_dataset.py`). Причина: 56 gold-JSON легче ревьюить и править в markdown-блоках, чем в однострочных JSONL.
+
 ### Конвенция `<model-slug>`
 
-Папки `data/mlx/`, `data/baseline/eval/`, `data/baseline/seeds/`, `data/baseline/train/` делятся на подпапки по slug модели. Slug — имя модели в нижнем регистре без провайдера, например:
+Папки `data/mlx/`, `data/baseline/eval/` делятся на подпапки по slug модели. Slug — имя модели в нижнем регистре без провайдера, например:
 - `qwen2.5-7b-instruct` — базовая модель
-- `qwen2.5-3b-instruct` — маленькая модель
-- `qwen2.5-coder-7b-instruct` — coder-вариант
-- `kmp-agent-ft`, `kmp-3b-ft`, `kmp-coder-ft` — fine-tuned модели
 - `gpt-4o-mini` — OpenAI baseline
+- `kmp-extract-ft` — fine-tuned модель
 
 ## Setup
 
@@ -65,15 +64,12 @@ cp .env.example .env        # fill in OPENAI_API_KEY and/or OPENROUTER_API_KEY
 ## Key Commands
 
 ```bash
-# Generate synthetic examples
-python -m src.dataset.gen_synthetic --count 10 --type develop --model openai/gpt-4o --seed 31
+# Build train/eval JSONL from source-of-truth markdown
+python -m src.dataset.build_dataset
 
-# Validate examples (accepts dir of .json files or .jsonl)
-python -m src.validator.validate data/seeds
+# Validate JSONL (schema, taxonomy, dedup, leakage)
+python -m src.validator.validate
 python -m src.validator.validate data/out/train.jsonl
-
-# Build train/eval split (80/20 stratified)
-python -m src.dataset.mix_and_split
 
 # Run baseline evaluation
 python -m src.baseline.run_baseline                                    # OpenAI/OpenRouter
@@ -88,16 +84,35 @@ python -m src.ft_client.openai.poll
 # Local MLX fine-tune workflow
 pip install mlx mlx-lm
 python -m src.ft_client.mlx.train --model Qwen/Qwen2.5-7B-Instruct
-python -m src.ft_client.mlx.export --ollama-name kmp-agent-ft
-python -m src.baseline.run_baseline --provider ollama --model kmp-agent-ft
+python -m src.ft_client.mlx.export --ollama-name kmp-extract-ft
+python -m src.baseline.run_baseline --provider ollama --model kmp-extract-ft
 ```
 
-## Dataset Modes
+## Dataset Format
 
-Examples fall into three modes (detected automatically by the validator):
-- **agent** (~70%): Full plan → step_read → action → SELF-CHECK → update cycle
-- **agent_question** (~20%): Model asks clarifying QUESTION: instead of acting
-- **plain** (~10%): Free prose response, no tool calls
+Single-turn extraction: system + user → assistant JSON. 56 примеров (45 train / 11 eval), стратифицировано по 6 блокам.
+
+### Extraction schema
+
+```json
+{
+  "title": "string",
+  "type": "feat | refactor | research",
+  "block": "workspace_foundation | indicators | analysis | polish_and_glue | breadth | tech_debt_refactor",
+  "modules": ["string"],
+  "dependsOn": [0],
+  "acceptanceCriteria": ["string"],
+  "outOfScope": ["string"]
+}
+```
+
+### Eval metrics
+
+- `type` / `block`: exact match
+- `modules`: IoU (Jaccard) — **главная метрика**
+- `dependsOn`: IoU
+- `acceptanceCriteria`: recall
+- `outOfScope`: precision
 
 ## Language
 
@@ -111,11 +126,8 @@ Project documentation and scenarios are in Russian. Code, variable names, and to
 ### Ollama перед обучением
 Перед запуском `mlx.train` убить Ollama (`pkill -f ollama`) — она держит модели в GPU-памяти (15+ GB), что вызывает OOM при обучении.
 
-### --mask-prompt и multi-turn (только MLX)
-`--mask-prompt` в mlx_lm маскирует всё до **последнего** сообщения, а не по ролям. Для multi-turn диалогов это значит: учится только финальный assistant-ход, все предыдущие (включая plan_write) маскируются. Альтернатива: `split_turns.py` — см. docstring скрипта для деталей и статуса. **OpenAI API** эту проблему не имеет — автоматически маскирует по ролям, multi-turn работает из коробки.
+### Single-turn и --mask-prompt (MLX)
+Новый датасет single-turn (3 сообщения: system, user, assistant), поэтому проблема `--mask-prompt` с multi-turn больше не актуальна. `--mask-prompt` корректно маскирует system+user и учит только на assistant-ответе.
 
-### data/out/ — единый выход mix_and_split
-`mix_and_split` перезаписывает `data/out/train.jsonl`. По умолчанию берёт `data/seeds/` и `data/synthetic/`. Для split-данных — явно указывать `--seeds-dir data/split/seeds --synthetic-dir data/split/synthetic`.
-
-### GGUF обязателен для Ollama с tool calling
-Импорт из safetensors (`FROM <папка>`) теряет chat template — модель не поддерживает tool calling. Всегда конвертировать в GGUF и прописывать TEMPLATE в Modelfile явно. Конвертер: `/private/tmp/llama.cpp/convert_hf_to_gguf.py`.
+### GGUF обязателен для Ollama
+Импорт из safetensors (`FROM <папка>`) теряет chat template. Всегда конвертировать в GGUF и прописывать TEMPLATE в Modelfile явно. Конвертер: `/private/tmp/llama.cpp/convert_hf_to_gguf.py`.

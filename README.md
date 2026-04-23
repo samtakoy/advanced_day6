@@ -10,7 +10,7 @@ Python-проект для Дня 6: подготовка датасета (58 J
 | Файл | Что внутри |
 |------|-----------|
 | [`docs/EXPLANATION.md`](docs/EXPLANATION.md) | Что это за проект и как он устроен (для новичка) |
-| [`docs/REPORT.md`](docs/REPORT.md) | Отчёт: baseline метрики, результаты FT |
+| [`docs/REPORT.md`](reports/DAY6_previous_attempt.md) | Отчёт: baseline метрики, результаты FT |
 | [`docs/LOCAL_FINETUNE_TUTORIAL.md`](docs/LOCAL_FINETUNE_TUTORIAL.md) | Пошаговый туториал локального FT на Mac (MLX + Ollama) |
 
 ## Архитектура (кратко)
