@@ -6,12 +6,13 @@
     - messages: 3 элемента с ролями [system, user, assistant]
     - все content непустые
     - assistant.content парсится как JSON и соответствует схеме extraction
-    - gold не содержит полей сверх 7 разрешённых (strict schema)
+    - gold не содержит полей сверх 8 разрешённых (strict schema)
     - type, block — из enum
-    - modules[i] — либо из alias-таблицы, либо начинается с "NEW:"
+    - modules[i] — из alias-таблицы (16 алиасов)
+    - newModules[i] — строка, не пересекается с alias-таблицей
     - dependsOn[i] — целое число в 1..99
     - acceptanceCriteria, outOfScope — массивы строк (допускаются пустые)
-    - нет дублей внутри modules / dependsOn / acceptanceCriteria / outOfScope
+    - нет дублей внутри modules / newModules / dependsOn / acceptanceCriteria / outOfScope
     - длина всего примера в оценочных токенах — в [50, 4096]
     - нет точных дубликатов по user.content внутри файла и между train <-> eval (leakage)
     - system prompt идентичен во всех строках обоих файлов и совпадает с data/extraction/system.md
@@ -36,11 +37,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # --- Taxonomy ---
 
 MODULE_ALIASES = {
-    "m-main", "m-data", "m-settings", "m-analysis", "m-alerts",
-    "m-portfolio", "m-pickers",
-    "fa-pickers", "fa-workspaces",
+    "m-main", "m-data", "m-settings", "m-analysis",
+    "fa-pickers",
     "cf-stocks", "cf-workspaces", "cf-indicators", "cf-experiments",
-    "cf-alerts", "cf-portfolio",
     "db", "net", "uikit", "utils", "theme", "resources", "mainentry",
 }
 TYPES = {"feat", "refactor", "research"}
@@ -50,7 +49,7 @@ BLOCKS = {
 }
 VALID_DEPS_MAX = 99
 REQUIRED_FIELDS = (
-    "title", "type", "block", "modules",
+    "title", "type", "block", "modules", "newModules",
     "dependsOn", "acceptanceCriteria", "outOfScope",
 )
 
@@ -98,13 +97,28 @@ def validate_gold(gold: dict, prefix: str) -> list[str]:
             if not isinstance(mod, str):
                 errors.append(f"{prefix}: modules содержит не-строку {mod!r}")
                 continue
-            if mod in MODULE_ALIASES or mod.startswith("NEW:"):
-                continue
-            errors.append(
-                f"{prefix}: modules[{mod!r}] — не алиас и не NEW:"
-            )
+            if mod not in MODULE_ALIASES:
+                errors.append(
+                    f"{prefix}: modules[{mod!r}] — не алиас из таблицы"
+                )
         if len(gold["modules"]) != len(set(gold["modules"])):
             errors.append(f"{prefix}: modules содержит дубли")
+
+    if not isinstance(gold["newModules"], list):
+        errors.append(f"{prefix}: gold.newModules должен быть list")
+    else:
+        for mod in gold["newModules"]:
+            if not isinstance(mod, str):
+                errors.append(f"{prefix}: newModules содержит не-строку {mod!r}")
+                continue
+            if not mod.strip():
+                errors.append(f"{prefix}: newModules содержит пустую строку")
+            elif mod in MODULE_ALIASES:
+                errors.append(
+                    f"{prefix}: newModules[{mod!r}] — алиас, должен быть в modules"
+                )
+        if len(gold["newModules"]) != len(set(gold["newModules"])):
+            errors.append(f"{prefix}: newModules содержит дубли")
 
     if not isinstance(gold["dependsOn"], list):
         errors.append(f"{prefix}: gold.dependsOn должен быть list")

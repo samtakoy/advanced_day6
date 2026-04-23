@@ -45,6 +45,7 @@ class ExampleMetrics:
     type_match: bool = False
     block_match: bool = False
     modules_iou: float = 0.0
+    new_modules_iou: float = 0.0
     depends_on_iou: float = 0.0
     ac_recall: float = 0.0
     oos_precision: float = 0.0
@@ -89,6 +90,10 @@ def score(gold: dict, predicted: dict) -> ExampleMetrics:
     gold_modules = set(gold.get("modules", []))
     pred_modules = set(predicted.get("modules", []))
     m.modules_iou = iou(gold_modules, pred_modules)
+
+    gold_new = set(gold.get("newModules", []))
+    pred_new = set(predicted.get("newModules", []))
+    m.new_modules_iou = iou(gold_new, pred_new)
 
     gold_deps = set(gold.get("dependsOn", []))
     pred_deps = set(predicted.get("dependsOn", []))
@@ -284,6 +289,7 @@ def main() -> int:
                     "type_match": m.type_match,
                     "block_match": m.block_match,
                     "modules_iou": m.modules_iou,
+                    "new_modules_iou": m.new_modules_iou,
                     "depends_on_iou": m.depends_on_iou,
                     "ac_recall": m.ac_recall,
                     "oos_precision": m.oos_precision,
@@ -296,7 +302,7 @@ def main() -> int:
             }, f, ensure_ascii=False, indent=2)
 
         print(f"  json_valid={m.json_valid}  type={m.type_match}  block={m.block_match}")
-        print(f"  modules_iou={m.modules_iou:.2f}  deps_iou={m.depends_on_iou:.2f}")
+        print(f"  modules_iou={m.modules_iou:.2f}  new_modules_iou={m.new_modules_iou:.2f}  deps_iou={m.depends_on_iou:.2f}")
         print(f"  ac_recall={m.ac_recall:.2f}  oos_precision={m.oos_precision:.2f}")
         print(f"  validation_errors={len(m.validation_errors)}")
         if m.validation_errors:
@@ -323,6 +329,7 @@ def main() -> int:
         print(f"  type match:   {sum(1 for m in valid if m.type_match)}/{nv}")
         print(f"  block match:  {sum(1 for m in valid if m.block_match)}/{nv}")
         print(f"  modules IoU:  {sum(m.modules_iou for m in valid)/nv:.3f} (avg)")
+        print(f"  newMods IoU:  {sum(m.new_modules_iou for m in valid)/nv:.3f} (avg)")
         print(f"  deps IoU:     {sum(m.depends_on_iou for m in valid)/nv:.3f} (avg)")
         print(f"  AC recall:    {sum(m.ac_recall for m in valid)/nv:.3f} (avg)")
         print(f"  OoS precision:{sum(m.oos_precision for m in valid)/nv:.3f} (avg)")

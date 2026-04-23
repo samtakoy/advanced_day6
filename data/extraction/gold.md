@@ -19,6 +19,7 @@
   "type": "research",
   "block": "workspace_foundation",
   "modules": [],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "plans/research/architecture.md содержит SQL CREATE всех новых таблиц",
@@ -41,6 +42,7 @@
   "type": "feat",
   "block": "workspace_foundation",
   "modules": ["db", "cf-workspaces", "mainentry"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "./gradlew :composeApp:compileKotlinJvm зелёный",
@@ -62,7 +64,8 @@
   "title": "Таб Main: карусель воркспейсов",
   "type": "feat",
   "block": "workspace_foundation",
-  "modules": ["m-main", "uikit"],
+  "modules": ["uikit"],
+  "newModules": [],
   "dependsOn": [2],
   "acceptanceCriteria": [
     "smoke: empty state → создание workspace → свайп между страницами → индикатор страниц отражает активную",
@@ -84,7 +87,8 @@
   "title": "ChartSlot с графиком и автодогрузкой свечей",
   "type": "feat",
   "block": "workspace_foundation",
-  "modules": ["m-main", "cf-workspaces", "cf-stocks"],
+  "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [2, 3],
   "acceptanceCriteria": [
     "воркспейс с двумя слотами GAZP/SBER D1 при первом открытии качает и рисует свечи по мере поступления",
@@ -106,7 +110,8 @@
   "title": "CRUD воркспейсов/слотов + общий Ticker/Period Picker",
   "type": "feat",
   "block": "workspace_foundation",
-  "modules": ["m-main", "fa-pickers", "m-pickers", "mainentry", "cf-stocks", "uikit"],
+  "modules": ["m-main", "fa-pickers", "cf-stocks", "uikit"],
+  "newModules": ["modules:features:pickers"],
   "dependsOn": [4],
   "acceptanceCriteria": [
     "smoke: CRUD workspaces + добавление 2 слотов через picker + reorder + удаление слота",
@@ -129,6 +134,7 @@
   "type": "feat",
   "block": "indicators",
   "modules": ["cf-indicators"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "./gradlew :modules:core:core-features:indicators:allTests зелёный, покрытие калькуляторов ≥80%",
@@ -151,7 +157,8 @@
   "title": "IndicatorConfig: персист и рендер на ChartSlot",
   "type": "feat",
   "block": "indicators",
-  "modules": ["db", "cf-indicators", "cf-workspaces", "m-main", "uikit"],
+  "modules": ["db", "cf-indicators", "cf-workspaces", "uikit"],
+  "newModules": [],
   "dependsOn": [4, 6],
   "acceptanceCriteria": [
     "smoke: EMA(20)+RSI(14) на GAZP D1 — добавить, рестарт, изменить период EMA, выключить RSI, удалить",
@@ -174,6 +181,7 @@
   "type": "feat",
   "block": "analysis",
   "modules": ["mainentry", "m-analysis", "cf-experiments", "db", "uikit"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "smoke: таб Анализ → Echo → запуск GAZP D1 → RUNNING → FINISHED, артефакт виден в RunDetail",
@@ -195,7 +203,8 @@
   "title": "Эксперимент: сегментация графика по правилу",
   "type": "feat",
   "block": "analysis",
-  "modules": ["cf-experiments", "cf-indicators", "m-analysis", "m-main", "uikit", "NEW::modules:features-api:chart"],
+  "modules": ["cf-experiments", "uikit"],
+  "newModules": ["modules:features-api:chart"],
   "dependsOn": [6, 7, 8],
   "acceptanceCriteria": [
     "запуск RsiOverboughtOversold(14, 70/30) на GAZP D1 → ≥N сегментов + сводка в артефакте",
@@ -217,7 +226,8 @@
   "title": "Эксперимент: метрики по серии сегментов",
   "type": "feat",
   "block": "analysis",
-  "modules": ["cf-experiments", "m-analysis", "fa-pickers", "uikit"],
+  "modules": ["uikit"],
+  "newModules": [],
   "dependsOn": [8, 9],
   "acceptanceCriteria": [
     "запуск без фильтра на N сегментах → артефакты сформированы, графики отображаются",
@@ -239,7 +249,8 @@
   "title": "Эксперимент: бэктест стратегии индикаторов",
   "type": "feat",
   "block": "analysis",
-  "modules": ["cf-experiments", "cf-indicators", "m-analysis", "uikit"],
+  "modules": [],
+  "newModules": [],
   "dependsOn": [6, 8, 10],
   "acceptanceCriteria": [
     "EmaCross(9, 21) на SBER D1 за 2 года → ≥10 сделок, equity и метрики отображаются",
@@ -262,6 +273,7 @@
   "type": "refactor",
   "block": "polish_and_glue",
   "modules": ["uikit", "m-main", "m-analysis"],
+  "newModules": [],
   "dependsOn": [7, 10, 11],
   "acceptanceCriteria": [
     "./gradlew assembleDebug зелёный, все существующие smoke проходят",
@@ -283,7 +295,8 @@
   "title": "Кросс-навигация: открыть тикер в Workspace",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": ["m-data", "m-analysis", "fa-workspaces", "m-main", "mainentry", "uikit"],
+  "modules": ["m-data", "m-analysis", "m-main", "uikit"],
+  "newModules": ["modules:features-api:workspaces"],
   "dependsOn": [5, 11],
   "acceptanceCriteria": [
     "smoke: из DataTab выбрать тикер → 'В воркспейс' → диалог → выбор → MainTab с открытым workspace, слот появился",
@@ -304,7 +317,8 @@
   "title": "Экспорт/импорт воркспейсов и пресетов индикаторов",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": ["cf-workspaces", "cf-indicators", "m-main", "utils"],
+  "modules": ["utils"],
+  "newModules": [],
   "dependsOn": [5, 7],
   "acceptanceCriteria": [
     "экспорт workspace с 3 слотами и 2 индикаторами → валидный JSON, парсится Json.decodeFromString<WorkspaceSnapshot>",
@@ -326,7 +340,8 @@
   "title": "Батч-прогон эксперимента + сравнение прогонов",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": ["cf-experiments", "m-analysis", "fa-pickers", "uikit"],
+  "modules": [],
+  "newModules": [],
   "dependsOn": [5, 10, 11],
   "acceptanceCriteria": [
     "батч EmaCross(9,21) на 10 тикерах → таблица с метриками + сортировка по PnL",
@@ -347,7 +362,8 @@
   "title": "Yahoo Finance как встроенный источник + импорт пресетов по URL",
   "type": "feat",
   "block": "breadth",
-  "modules": ["cf-stocks", "m-data"],
+  "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "smoke: Yahoo как источник + маппинг GAZP→GAZP.ME + дневки за год → ≥200 свечей в CandleTable",
@@ -369,7 +385,8 @@
   "title": "Авторизованные источники: Alor OpenAPI",
   "type": "feat",
   "block": "breadth",
-  "modules": ["cf-stocks", "utils", "net", "m-data"],
+  "modules": ["utils", "net"],
+  "newModules": [],
   "dependsOn": [16],
   "acceptanceCriteria": [
     "plans/research/authorized-sources.md с выбором решения принят",
@@ -392,7 +409,8 @@
   "title": "Watchlist — избранные тикеры с последними ценами",
   "type": "feat",
   "block": "breadth",
-  "modules": ["cf-stocks", "m-main", "m-data", "uikit"],
+  "modules": ["m-main", "m-data"],
+  "newModules": [],
   "dependsOn": [2, 3, 4, 5, 13],
   "acceptanceCriteria": [
     "smoke: 3 тикера в watchlist + reorder + удаление + клик по строке → открыт воркспейс с этим тикером",
@@ -413,7 +431,8 @@
   "title": "AlertEngine + локальные уведомления",
   "type": "feat",
   "block": "breadth",
-  "modules": ["cf-alerts", "cf-indicators", "cf-stocks", "utils", "m-alerts"],
+  "modules": ["cf-indicators", "utils"],
+  "newModules": ["modules:core:core-features:alerts", "modules:features:alerts"],
   "dependsOn": [2, 3, 4, 5, 6],
   "acceptanceCriteria": [
     "smoke: RSI(14) > 70 на GAZP D1 enabled → при свече с RSI > 70 получен notification + запись в AlertEvent",
@@ -436,7 +455,8 @@
   "title": "Portfolio — учёт позиций и P&L",
   "type": "feat",
   "block": "breadth",
-  "modules": ["cf-portfolio", "cf-stocks", "m-portfolio", "fa-pickers", "uikit"],
+  "modules": ["fa-pickers"],
+  "newModules": ["modules:core:core-features:portfolio", "modules:features:portfolio"],
   "dependsOn": [2, 5],
   "acceptanceCriteria": [
     "smoke: SBER Long 100 @ 250 → unrealized PnL по текущей свече",
@@ -460,6 +480,7 @@
   "type": "research",
   "block": "breadth",
   "modules": [],
+  "newModules": [],
   "dependsOn": [14],
   "acceptanceCriteria": [
     "plans/research/cloud-sync.md: таблица сравнения вариантов, выбранный вариант с аргументацией, диаграмма потока данных, список MVP-задач с оценкой по дням",
@@ -480,7 +501,8 @@
   "title": "Android Widget + App Shortcuts",
   "type": "feat",
   "block": "breadth",
-  "modules": ["mainentry", "NEW::composeApp"],
+  "modules": ["mainentry"],
+  "newModules": ["composeApp"],
   "dependsOn": [3, 18],
   "acceptanceCriteria": [
     "виджет добавляется на рабочий стол Android, показывает актуальные данные из Watchlist, тап открывает приложение на воркспейсе тикера",
@@ -503,6 +525,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "grep 'io.ktor.client.HttpClient' в modules/core/core-features/stocks/ → 0 (остаётся только в modules/core/network/)",
@@ -525,6 +548,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "grep 'import ru.samtakoy.stocks.db.StocksDatabase' в modules/core/core-features/stocks/data/repository/ → 0",
@@ -555,6 +579,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["m-data", "cf-stocks"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "./gradlew assembleDebug зелёный; ./gradlew :composeApp:allTests не регрессирует",
@@ -584,6 +609,7 @@
   "type": "feat",
   "block": "workspace_foundation",
   "modules": ["cf-workspaces", "m-main"],
+  "newModules": [],
   "dependsOn": [5, 7],
   "acceptanceCriteria": [
     "smoke: выбор шаблона 'Blue chips' на пустой БД → воркспейс с 4 слотами и индикаторами, после рестарта всё на месте",
@@ -607,7 +633,8 @@
   "title": "Split-screen ChartSlot",
   "type": "feat",
   "block": "workspace_foundation",
-  "modules": ["db", "cf-workspaces", "m-main", "NEW::modules:features-api:chart"],
+  "modules": ["db", "cf-workspaces", "m-main"],
+  "newModules": ["modules:features-api:chart"],
   "dependsOn": [],
   "acceptanceCriteria": [],
   "outOfScope": ["горизонтальный split (рядом)"]
@@ -626,6 +653,7 @@
   "type": "feat",
   "block": "workspace_foundation",
   "modules": ["db", "cf-workspaces", "m-main"],
+  "newModules": [],
   "dependsOn": [5],
   "acceptanceCriteria": [
     "на двух воркспейсах задать разные теги → индикатор страниц визуально отличает",
@@ -648,6 +676,7 @@
   "type": "feat",
   "block": "workspace_foundation",
   "modules": ["db", "cf-workspaces", "m-main"],
+  "newModules": [],
   "dependsOn": [4],
   "acceptanceCriteria": [
     "режим Synced → скролл одного графика двигает все остальные",
@@ -670,7 +699,8 @@
   "title": "Custom indicator formula DSL",
   "type": "feat",
   "block": "indicators",
-  "modules": ["cf-indicators", "m-main"],
+  "modules": ["cf-indicators"],
+  "newModules": [],
   "dependsOn": [6, 7],
   "acceptanceCriteria": [
     "юнит-тесты на парсер ≥10 кейсов (приоритеты операций, скобки, ошибки синтаксиса)",
@@ -694,6 +724,7 @@
   "type": "feat",
   "block": "indicators",
   "modules": ["db", "cf-indicators", "m-main"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "свипер SMA с periods=[10, 20, 50] → 3 линии разных цветов",
@@ -716,6 +747,7 @@
   "type": "feat",
   "block": "indicators",
   "modules": ["cf-indicators", "uikit"],
+  "newModules": [],
   "dependsOn": [6],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -733,7 +765,8 @@
   "title": "Индикатор на результатах эксперимента",
   "type": "feat",
   "block": "indicators",
-  "modules": ["cf-experiments", "cf-indicators", "m-main"],
+  "modules": ["cf-experiments"],
+  "newModules": [],
   "dependsOn": [7, 11, 32],
   "acceptanceCriteria": [
     "прогон EmaCross(9,21) на SBER D1 → из слота SBER добавить overlay этого run → стрелки на барах входа/выхода",
@@ -755,7 +788,8 @@
   "title": "Ручная разметка сегментов",
   "type": "feat",
   "block": "analysis",
-  "modules": ["cf-experiments", "m-main", "NEW::modules:features-api:chart"],
+  "modules": ["cf-experiments", "m-main"],
+  "newModules": ["modules:features-api:chart"],
   "dependsOn": [4, 9, 10],
   "acceptanceCriteria": [
     "выделить диапазон → ввести label → сохранилось",
@@ -779,6 +813,7 @@
   "type": "feat",
   "block": "analysis",
   "modules": ["cf-experiments", "cf-indicators", "m-analysis"],
+  "newModules": [],
   "dependsOn": [9, 30],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -797,6 +832,7 @@
   "type": "feat",
   "block": "analysis",
   "modules": ["cf-experiments", "m-analysis"],
+  "newModules": [],
   "dependsOn": [8, 11, 15],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -815,6 +851,7 @@
   "type": "feat",
   "block": "analysis",
   "modules": ["cf-experiments"],
+  "newModules": [],
   "dependsOn": [11],
   "acceptanceCriteria": [
     "прогон RsiMeanReversion с allowShort=true на SBER D1 за 2 года → TradeLog содержит сделки с direction=Short",
@@ -837,7 +874,8 @@
   "title": "Global search (Cmd-K)",
   "type": "feat",
   "block": "polish_and_glue",
-  "modules": ["NEW::modules:features:search", "NEW::modules:features-api:search", "cf-stocks", "cf-workspaces"],
+  "modules": ["cf-stocks", "cf-workspaces"],
+  "newModules": ["modules:features:search", "modules:features-api:search"],
   "dependsOn": [5, 8, 19],
   "acceptanceCriteria": [
     "Cmd-K → появился оверлей",
@@ -862,6 +900,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["theme", "m-settings", "m-main"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "выбрать preset 'high-contrast' в settings → график и UI поменяли цвета без перезапуска",
@@ -884,6 +923,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["resources", "utils", "m-main", "m-data", "m-settings"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "переключить язык в settings → UI переключился без рестарта",
@@ -906,6 +946,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["m-analysis"],
+  "newModules": [],
   "dependsOn": [8, 10, 11],
   "acceptanceCriteria": [],
   "outOfScope": ["редактирование артефактов — только просмотр"]
@@ -924,6 +965,7 @@
   "type": "feat",
   "block": "breadth",
   "modules": ["cf-stocks", "m-data"],
+  "newModules": [],
   "dependsOn": [16, 17, 23],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -942,6 +984,7 @@
   "type": "feat",
   "block": "breadth",
   "modules": ["cf-stocks", "db"],
+  "newModules": [],
   "dependsOn": [16, 23],
   "acceptanceCriteria": [
     "добавить Binance как источник → скачать BTCUSDT 1h за неделю → ≥150 свечей в CandleTable",
@@ -965,6 +1008,7 @@
   "type": "feat",
   "block": "breadth",
   "modules": ["net", "cf-stocks", "m-main"],
+  "newModules": [],
   "dependsOn": [18, 43],
   "acceptanceCriteria": [
     "Watchlist с 5 тикерами крипты (Binance) → цены обновляются каждые 1-3 секунды без polling",
@@ -987,7 +1031,8 @@
   "title": "iOS WidgetKit аналог Android-виджета",
   "type": "feat",
   "block": "breadth",
-  "modules": ["db", "NEW::iosApp"],
+  "modules": ["db"],
+  "newModules": ["iosApp"],
   "dependsOn": [22],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -1006,6 +1051,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "grep -r 'runBlocking' modules/core/core-features/stocks/src/commonTest/ → 0",
@@ -1029,6 +1075,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["utils", "theme", "m-settings", "cf-stocks"],
+  "newModules": [],
   "dependsOn": [1],
   "acceptanceCriteria": [
     "grep -r 'import.*DataStore' modules/ --include='*.kt' вне core/utils/data/ → 0",
@@ -1051,7 +1098,8 @@
   "title": "Convention plugin kmp.feature для feature-модулей",
   "type": "refactor",
   "block": "tech_debt_refactor",
-  "modules": ["NEW::build-logic:convention", "m-main", "m-data", "m-settings"],
+  "modules": ["m-main", "m-data", "m-settings"],
+  "newModules": ["build-logic:convention"],
   "dependsOn": [],
   "acceptanceCriteria": [
     "build.gradle.kts среднего feature-модуля ≤30 строк (сейчас ~60)",
@@ -1074,7 +1122,8 @@
   "title": "Screen-tests фреймворк на Paparazzi/Roborazzi",
   "type": "refactor",
   "block": "tech_debt_refactor",
-  "modules": ["m-data", "m-main", "m-settings"],
+  "modules": [],
+  "newModules": [],
   "dependsOn": [7],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -1093,6 +1142,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["db"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [],
   "outOfScope": ["сами smoke-сценарии — они как читали fixture, так и будут", "live-данные (котировки, свечи) из API — только seed-файлы"]
@@ -1110,7 +1160,8 @@
   "title": "Desktop system tray",
   "type": "feat",
   "block": "breadth",
-  "modules": ["NEW::composeApp", "utils", "cf-stocks"],
+  "modules": ["utils", "cf-stocks"],
+  "newModules": ["composeApp"],
   "dependsOn": [],
   "acceptanceCriteria": [
     "на Desktop при запуске видна иконка в трее",
@@ -1134,6 +1185,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["m-settings", "resources"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "в settings пункт 'О приложении' → клик → видна версия, автор, ссылка, changelog (хотя бы последние 5 записей)",
@@ -1155,6 +1207,7 @@
   "type": "feat",
   "block": "polish_and_glue",
   "modules": ["utils", "m-main", "m-analysis"],
+  "newModules": [],
   "dependsOn": [13, 22],
   "acceptanceCriteria": [
     "на слоте кнопка 'Поделиться' → на Android открывается системный chooser",
@@ -1178,6 +1231,7 @@
   "type": "refactor",
   "block": "tech_debt_refactor",
   "modules": ["cf-stocks"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [],
   "outOfScope": []
@@ -1196,6 +1250,7 @@
   "type": "research",
   "block": "tech_debt_refactor",
   "modules": ["net"],
+  "newModules": [],
   "dependsOn": [],
   "acceptanceCriteria": [
     "plans/research/ktor-migration.md с перечнем проблемных мест и оценкой по часам",
@@ -1216,7 +1271,8 @@
   "title": "Локальная телеметрия ошибок",
   "type": "feat",
   "block": "breadth",
-  "modules": ["NEW::modules:core:telemetry", "m-settings", "utils"],
+  "modules": ["m-settings", "utils"],
+  "newModules": ["modules:core:telemetry"],
   "dependsOn": [],
   "acceptanceCriteria": [
     "при возникновении Exception в любом месте — запись в telemetry.db",
