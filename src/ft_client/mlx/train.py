@@ -2,12 +2,8 @@
 """Локальное QLoRA-обучение через MLX (Apple Silicon).
 
 Обёртка над mlx_lm.lora — готовит данные и запускает тренировку.
-mlx_lm нативно поддерживает OpenAI chat format с tool_calls (v0.31+):
-  - ключ "messages" в каждой JSONL-строке — стандартный chat format
-  - ключ "tools" — список tool schemas, нужен для Qwen chat template
-
-Скрипт автоматически добавляет "tools" из contracts/tool_schemas.json
-в каждую строку датасета перед запуском обучения.
+Датасет — single-turn extraction (system + user → assistant JSON),
+формат OpenAI chat messages. Tool calling не используется.
 
 Usage:
     python -m src.ft_client.mlx.train                                    # defaults
@@ -19,11 +15,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # Корень проекта — на 4 уровня выше (mlx/ → ft_client/ → src/ → advanced_day6/)
@@ -36,65 +30,46 @@ from src.utils import model_slug  # noqa: E402
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
 # Гиперпараметры по умолчанию (разумные для ~50 примеров на 7B модели):
-#   iters=600   — ~12 эпох на 47 примерах (47 * 12 ≈ 564)
-#   lora-layers=16 — количество слоёв для LoRA-адаптера
-#   batch-size=1   — минимальный батч, экономит RAM
+#   iters=600   — ~13 эпох на 45 примерах (45 * 13 ≈ 585)
+#   lora-layers=8 — экономит ~6GB RAM (16 + max-seq-length 4096 → OOM на 48GB Mac)
+#   batch-size=1  — минимальный батч, экономит RAM
 DEFAULT_ITERS = 600
-# 8 слоёв вместо 16 — экономит ~6GB RAM при обучении.
-# 16 слоёв + max-seq-length 4096 вызывает OOM на 48GB Mac.
 DEFAULT_LORA_LAYERS = 8
 DEFAULT_BATCH_SIZE = 1
 DEFAULT_LEARNING_RATE = 1e-5
-# Наши примеры длинные (до 6000 tokens) — дефолт mlx_lm (2048) обрезает их,
-# что приводит к loss=nan. 8192 покрывает все примеры с запасом.
-DEFAULT_MAX_SEQ_LENGTH = 8192
-
-
-def load_tool_schemas(contracts_dir: Path) -> list[dict]:
-    """Загрузить tool schemas из contracts/tool_schemas.json."""
-    schemas_path = contracts_dir / "tool_schemas.json"
-    with schemas_path.open(encoding="utf-8") as f:
-        data = json.load(f)
-    return data["tools"]
+# Extraction-примеры короткие (~1300-1800 токенов), 4096 с запасом.
+DEFAULT_MAX_SEQ_LENGTH = 4096
 
 
 def prepare_data_dir(
     train_jsonl: Path,
     eval_jsonl: Path | None,
-    tools: list[dict],
     out_dir: Path,
 ) -> Path:
-    """Подготовить временную папку с данными для mlx_lm.
+    """Подготовить папку с данными для mlx_lm.
 
     mlx_lm ожидает папку с train.jsonl (и опционально valid.jsonl).
-    Каждая строка должна содержать "messages" и "tools".
-    Наш датасет уже содержит "messages", но "tools" нужно добавить —
-    без этого Qwen chat template не вставит описания инструментов в промпт.
+    Наш датасет уже в формате OpenAI chat messages — просто копируем.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    def inject_tools_into_jsonl(src: Path, dst: Path) -> int:
-        """Скопировать JSONL, добавив "tools" к каждой строке. Возвращает число строк."""
+    def copy_jsonl(src: Path, dst: Path) -> int:
         count = 0
         with src.open(encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
             for line in fin:
                 line = line.strip()
                 if not line:
                     continue
-                example = json.loads(line)
-                # Добавляем tools только если их ещё нет
-                if "tools" not in example:
-                    example["tools"] = tools
-                fout.write(json.dumps(example, ensure_ascii=False) + "\n")
+                fout.write(line + "\n")
                 count += 1
         return count
 
-    n_train = inject_tools_into_jsonl(train_jsonl, out_dir / "train.jsonl")
-    print(f"  train.jsonl: {n_train} примеров (tools injected)")
+    n_train = copy_jsonl(train_jsonl, out_dir / "train.jsonl")
+    print(f"  train.jsonl: {n_train} примеров")
 
     if eval_jsonl and eval_jsonl.is_file():
-        n_eval = inject_tools_into_jsonl(eval_jsonl, out_dir / "valid.jsonl")
-        print(f"  valid.jsonl: {n_eval} примеров (tools injected)")
+        n_eval = copy_jsonl(eval_jsonl, out_dir / "valid.jsonl")
+        print(f"  valid.jsonl: {n_eval} примеров")
 
     return out_dir
 
@@ -106,9 +81,8 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
         "--model", args.model,
         "--data", str(data_dir),
         "--train",
-        # --mask-prompt: считать loss только по ответу модели (не по промпту).
-        # --mask-prompt: считать loss только по ответу модели (не по промпту).
-        # См. split_turns.py для альтернативного подхода к multi-turn.
+        # --mask-prompt: считать loss только по assistant-ответу (не по system+user).
+        # Single-turn extraction — mask-prompt работает корректно.
         "--mask-prompt",
         "--iters", str(args.iters),
         "--num-layers", str(args.lora_layers),
@@ -134,7 +108,7 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="MLX QLoRA fine-tuning для KMP-агента (Apple Silicon)")
+        description="MLX QLoRA fine-tuning для extraction-модели (Apple Silicon)")
     ap.add_argument("--model", default=DEFAULT_MODEL,
                     help=f"HuggingFace model ID (default: {DEFAULT_MODEL})")
     ap.add_argument("--train", type=Path,
@@ -143,9 +117,6 @@ def main() -> int:
     ap.add_argument("--eval", type=Path,
                     default=ROOT / "data" / "out" / "eval.jsonl",
                     help="Путь к eval.jsonl (для валидации во время обучения)")
-    ap.add_argument("--contracts", type=Path,
-                    default=ROOT / "data" / "contracts",
-                    help="Папка с tool_schemas.json")
     ap.add_argument("--iters", type=int, default=DEFAULT_ITERS,
                     help=f"Число итераций обучения (default: {DEFAULT_ITERS})")
     ap.add_argument("--lora-layers", type=int, default=DEFAULT_LORA_LAYERS,
@@ -186,14 +157,11 @@ def main() -> int:
         return 2
 
     # --- Подготовка данных ---
-    # Создаём временную папку с данными, в которых к каждой строке добавлен "tools"
     print("=== Подготовка данных ===")
-    tools = load_tool_schemas(args.contracts)
-    print(f"  Загружено {len(tools)} tool schemas из {args.contracts}")
 
-    # Подготовленные данные рядом с адаптером: mlx_out/<slug>/mlx_data/
+    # Подготовленные данные рядом с адаптером: data/mlx/<slug>/mlx_data/
     data_dir = args.adapter_path.parent / "mlx_data"
-    prepare_data_dir(args.train, args.eval, tools, data_dir)
+    prepare_data_dir(args.train, args.eval, data_dir)
 
     # --- Сборка команды ---
     cmd = build_mlx_command(args, data_dir)

@@ -11,7 +11,7 @@
 Usage:
     python -m src.ft_client.mlx.export                                    # defaults
     python -m src.ft_client.mlx.export --model Qwen/Qwen2.5-7B-Instruct  # выбрать модель
-    python -m src.ft_client.mlx.export --ollama-name kmp-agent-ft         # имя в Ollama
+    python -m src.ft_client.mlx.export --ollama-name kmp-extract-ft        # имя в Ollama
     python -m src.ft_client.mlx.export --quantize q4_K_M                  # квантизация GGUF
     python -m src.ft_client.mlx.export --dry-run                          # показать план
 """
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent.parent
 from src.utils import model_slug  # noqa: E402
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
-DEFAULT_OLLAMA_NAME = "kmp-agent-ft"
+DEFAULT_OLLAMA_NAME = "kmp-extract-ft"
 
 
 def step_fuse(model: str, adapter_path: Path, fused_path: Path, dry_run: bool) -> bool:
@@ -146,14 +146,13 @@ def step_ollama_import(
 
     # Modelfile — инструкция для Ollama, откуда брать модель
     # FROM указывает на GGUF файл или на HF-папку с safetensors
-    modelfile_content = f"""# Автосгенерированный Modelfile для fine-tuned KMP-агента
+    modelfile_content = f"""# Автосгенерированный Modelfile для fine-tuned extraction-модели
 # Базовая модель: {base_model}
 # Дата: see git log
 FROM {gguf_path if gguf_path.exists() else fused_path}
 
 # Системный промпт не вшиваем — он подаётся через API при каждом запросе.
-# Это позволяет использовать одну модель с разными system prompts
-# (system_agent.md / system_plain.md).
+# Это позволяет обновлять system prompt (таксономию модулей) без пересборки модели.
 """
 
     modelfile_path = fused_path.parent / "Modelfile"
