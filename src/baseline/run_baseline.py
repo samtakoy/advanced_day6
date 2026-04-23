@@ -35,6 +35,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.utils import model_slug  # noqa: E402
+from src.validator.validate import validate_gold  # noqa: E402
 
 
 @dataclass
@@ -49,6 +50,7 @@ class ExampleMetrics:
     oos_precision: float = 0.0
     tokens_in: int = 0
     tokens_out: int = 0
+    validation_errors: list[str] = field(default_factory=list)
     error: str | None = None
     gold: dict = field(default_factory=dict)
     predicted: dict = field(default_factory=dict)
@@ -114,15 +116,20 @@ def score(gold: dict, predicted: dict) -> ExampleMetrics:
 
 
 def call_api(client, model: str, messages: list[dict],
-             temperature: float, retries: int = 3):
+             temperature: float, num_ctx: int | None = None,
+             retries: int = 3):
     last_err = None
+    kwargs: dict = dict(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+    )
+    if num_ctx is not None:
+        # Ollama OpenAI-compat API принимает extra_body для специфичных параметров
+        kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
     for attempt in range(retries):
         try:
-            return client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-            )
+            return client.chat.completions.create(**kwargs)
         except Exception as e:
             last_err = e
             wait = 2 ** attempt
@@ -145,6 +152,9 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--provider", choices=["auto", "openai", "openrouter", "ollama"],
                     default="auto")
+    ap.add_argument("--num-ctx", type=int, default=None,
+                    help="Context window size (Ollama only). Default: model's default (~32K). "
+                         "For extraction 4096 is enough.")
     args = ap.parse_args()
 
     try:
@@ -219,7 +229,8 @@ def main() -> int:
             continue
 
         try:
-            resp = call_api(client, model, prompt_msgs, args.temperature)
+            resp = call_api(client, model, prompt_msgs, args.temperature,
+                           num_ctx=args.num_ctx)
         except Exception as e:
             print(f"  [ERROR] {e}", file=sys.stderr)
             m = ExampleMetrics(name=name, error=str(e))
@@ -245,9 +256,11 @@ def main() -> int:
 
         if predicted is not None and isinstance(predicted, dict):
             m = score(gold, predicted)
+            m.validation_errors = validate_gold(predicted, name)
         else:
             m = ExampleMetrics(name=name, gold=gold)
             m.error = "JSON parse failed"
+            m.validation_errors = ["JSON parse failed"]
 
         m.name = name
         m.tokens_in = resp.usage.prompt_tokens
@@ -275,6 +288,7 @@ def main() -> int:
                     "ac_recall": m.ac_recall,
                     "oos_precision": m.oos_precision,
                 },
+                "validation_errors": m.validation_errors,
                 "usage": {
                     "prompt_tokens": resp.usage.prompt_tokens,
                     "completion_tokens": resp.usage.completion_tokens,
@@ -284,6 +298,10 @@ def main() -> int:
         print(f"  json_valid={m.json_valid}  type={m.type_match}  block={m.block_match}")
         print(f"  modules_iou={m.modules_iou:.2f}  deps_iou={m.depends_on_iou:.2f}")
         print(f"  ac_recall={m.ac_recall:.2f}  oos_precision={m.oos_precision:.2f}")
+        print(f"  validation_errors={len(m.validation_errors)}")
+        if m.validation_errors:
+            for ve in m.validation_errors[:5]:
+                print(f"    - {ve}")
         print(f"  tokens in={m.tokens_in} out={m.tokens_out}")
 
     if args.dry_run:
@@ -308,6 +326,10 @@ def main() -> int:
         print(f"  deps IoU:     {sum(m.depends_on_iou for m in valid)/nv:.3f} (avg)")
         print(f"  AC recall:    {sum(m.ac_recall for m in valid)/nv:.3f} (avg)")
         print(f"  OoS precision:{sum(m.oos_precision for m in valid)/nv:.3f} (avg)")
+        schema_ok = sum(1 for m in metrics_list if not m.validation_errors)
+        total_ve = sum(len(m.validation_errors) for m in metrics_list)
+        print(f"  schema valid: {schema_ok}/{n}")
+        print(f"  validation errors total: {total_ve}")
 
     tot_in = sum(m.tokens_in for m in metrics_list)
     tot_out = sum(m.tokens_out for m in metrics_list)

@@ -72,10 +72,19 @@ def step_convert_gguf(
     """
     print("\n=== Шаг 2: Конвертация в GGUF ===")
 
-    # Ищем convert-hf-to-gguf.py (часть llama.cpp)
-    # Обычно ставится через: pip install llama-cpp-python
-    # или клонируется из https://github.com/ggerganov/llama.cpp
+    # Ищем convert-hf-to-gguf.py:
+    #   1. В PATH (если llama.cpp клонирован)
+    #   2. В venv site-packages/bin/ (pip install llama-cpp-python)
     convert_script = shutil.which("convert-hf-to-gguf")
+
+    if not convert_script:
+        # llama-cpp-python ставит конвертер в site-packages/bin/
+        import site
+        for sp in site.getsitepackages():
+            candidate = Path(sp) / "bin" / "convert_hf_to_gguf.py"
+            if candidate.exists():
+                convert_script = str(candidate)
+                break
 
     if not convert_script:
         # Пробуем найти через python -m
@@ -106,7 +115,7 @@ def step_convert_gguf(
         return True
 
     # Стандартный путь через convert-hf-to-gguf
-    cmd = [convert_script, str(fused_path), "--outfile", str(gguf_path)]
+    cmd = [sys.executable, convert_script, str(fused_path), "--outfile", str(gguf_path)]
     if quantize:
         # Квантизация требует отдельного шага через llama-quantize
         print(f"  Примечание: квантизация {quantize} будет применена после конвертации")

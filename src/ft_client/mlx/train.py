@@ -98,10 +98,10 @@ def build_mlx_command(args: argparse.Namespace, data_dir: Path) -> list[str]:
     if args.grad_checkpoint:
         cmd += ["--grad-checkpoint"]
 
-    # Checkpoint и val loss каждые 100 итераций
-    cmd += ["--save-every", "100", "--steps-per-eval", "100"]
+    cmd += ["--save-every", str(args.save_every),
+            "--steps-per-eval", str(args.steps_per_eval)]
     if (data_dir / "valid.jsonl").exists():
-        cmd += ["--val-batches", "5"]
+        cmd += ["--val-batches", str(args.val_batches)]
 
     return cmd
 
@@ -131,6 +131,12 @@ def main() -> int:
                     help="Gradient accumulation: симулирует больший batch без роста RAM (default: 1)")
     ap.add_argument("--grad-checkpoint", action="store_true",
                     help="Gradient checkpointing: экономит ~40%% RAM, замедляет ~20%%")
+    ap.add_argument("--save-every", type=int, default=50,
+                    help="Сохранять checkpoint каждые N итераций (default: 50)")
+    ap.add_argument("--steps-per-eval", type=int, default=50,
+                    help="Считать val loss каждые N итераций (default: 50)")
+    ap.add_argument("--val-batches", type=int, default=11,
+                    help="Число eval-примеров для val loss (default: 11 — весь eval)")
     ap.add_argument("--adapter-path", type=Path, default=None,
                     help="Куда сохранить LoRA-адаптер (default: data/mlx/<model-slug>/adapters)")
     ap.add_argument("--dry-run", action="store_true",

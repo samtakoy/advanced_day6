@@ -26,3 +26,5 @@ data/mlx/
 
 # OpenAI FT state (содержит file IDs и job IDs)
 src/ft_client/last_*.json
+/data/baseline/train/
+/data/baseline/eval/
