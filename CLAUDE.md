@@ -19,6 +19,7 @@ advanced_day6/
 │   ├── ft_client/              # fine-tuning бэкенды
 │   │   ├── openai/             #   OpenAI API (upload, create_job, poll)
 │   │   └── mlx/                #   MLX local (train, export)
+│   ├── multistage/             # Day 9: multi-stage inference decomposition
 │   └── validator/              # валидация extraction JSONL
 ├── data/                       # все данные
 │   ├── extraction/             # source-of-truth для датасета
@@ -86,6 +87,12 @@ pip install mlx mlx-lm
 python -m src.ft_client.mlx.train --model Qwen/Qwen2.5-7B-Instruct
 python -m src.ft_client.mlx.export --ollama-name kmp-extract-ft
 python -m src.baseline.run_baseline --provider ollama --model kmp-extract-ft
+
+# Day 9: Multi-stage inference (monolithic vs 3-stage decomposition)
+python -m src.multistage.run_multistage --dry-run
+python -m src.multistage.run_multistage                                        # OpenAI/OpenRouter
+python -m src.multistage.run_multistage --provider ollama --model qwen2.5:7b-instruct
+python -m src.multistage.run_multistage --no-mono                              # skip monolithic comparison
 ```
 
 ## Dataset Format
