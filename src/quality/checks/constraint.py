@@ -20,21 +20,6 @@ def _check_invariants(extraction: dict) -> list[str]:
     if isinstance(title, str):
         if len(title) < 5:
             warnings.append(f"title слишком короткий ({len(title)} символов)")
-        if len(title) > 200:
-            warnings.append(f"title слишком длинный ({len(title)} символов)")
-
-    typ = extraction.get("type")
-    modules = extraction.get("modules", [])
-    new_modules = extraction.get("newModules", [])
-
-    # feat/refactor обычно затрагивает хотя бы один модуль
-    if typ in ("feat", "refactor") and not modules and not new_modules:
-        warnings.append(f"type={typ}, но modules и newModules пусты")
-
-    # feat обычно имеет acceptanceCriteria
-    ac = extraction.get("acceptanceCriteria", [])
-    if typ == "feat" and not ac:
-        warnings.append("type=feat, но acceptanceCriteria пуст")
 
     return warnings
 

@@ -319,6 +319,9 @@ def main() -> int:
     confidence_list: list[str | None] = []
     reasoning_list: list[str | None] = []
     checks_list: list[dict | None] = []
+    rejected_list: list[bool] = []
+    retried_list: list[bool] = []
+    latency_list: list[float] = []  # ms per example
 
     for name, messages in examples:
         prompt_msgs = [
@@ -337,11 +340,16 @@ def main() -> int:
 
         print(f"\n--- {name} (gold.title={gold.get('title', '?')[:50]}) ---")
 
+        t_start = time.perf_counter()
+
         if args.dry_run:
             print(f"  would call {model} via {provider}, temperature={args.temperature}")
             confidence_list.append(None)
             reasoning_list.append(None)
             checks_list.append(None)
+            rejected_list.append(False)
+            retried_list.append(False)
+            latency_list.append(0)
             continue
 
         try:
@@ -354,6 +362,9 @@ def main() -> int:
             confidence_list.append(None)
             reasoning_list.append(None)
             checks_list.append(None)
+            rejected_list.append(True)
+            retried_list.append(False)
+            latency_list.append((time.perf_counter() - t_start) * 1000)
             continue
 
         content = resp.choices[0].message.content or ""
@@ -376,56 +387,77 @@ def main() -> int:
 
         # --- External checks ---
         check_results: dict = {}
+        rejected = False
+        retried = False
 
         if predicted is not None and "constraint" in checks:
             from src.quality.checks.constraint import run as constraint_run
             cv = constraint_run(predicted)
             check_results["constraint"] = asdict(cv)
+            if cv.status == "FAIL":
+                rejected = True
 
+        # Redundancy: only if validation failed (retry to get a better answer)
         if "redundancy" in checks:
-            from src.quality.checks.redundancy import run as redundancy_run
-
-            rv = redundancy_run(
-                predicted,
-                client=client,
-                model=model,
-                messages=prompt_msgs,
-                gold=gold,
-                validate_fn=validate_gold,
-                score_fn=score,
-                num_ctx=args.num_ctx,
+            needs_retry = (
+                predicted is None
+                or bool(m.validation_errors)
+                or not m.json_valid
             )
-            check_results["redundancy"] = asdict(rv)
 
-            # Pick the best valid attempt if it improves on the original
-            best_predicted = predicted
-            best_iou = m.modules_iou if m.json_valid else -1.0
-            upgraded = False
-            for attempt in rv.details.get("attempts", []):
-                if not attempt.get("valid") or not attempt.get("parsed"):
-                    continue
-                vs = attempt.get("vs_gold", {})
-                attempt_iou = vs.get("modules_iou", 0)
-                if attempt_iou > best_iou:
-                    best_iou = attempt_iou
-                    best_predicted = attempt.get("extraction")
-                    upgraded = True
+            if needs_retry:
+                retried = True
+                from src.quality.checks.redundancy import run as redundancy_run
 
-            if upgraded and best_predicted:
-                m_new = score(gold, best_predicted)
-                m_new.name = m.name
-                m_new.tokens_in = m.tokens_in
-                m_new.tokens_out = m.tokens_out
-                m_new.validation_errors = validate_gold(best_predicted, name)
-                check_results["redundancy_upgrade"] = {
-                    "original_modules_iou": m.modules_iou,
-                    "upgraded_modules_iou": m_new.modules_iou,
-                }
-                metrics_list[-1] = m_new
-                m = m_new
-                predicted = best_predicted
+                rv = redundancy_run(
+                    predicted,
+                    client=client,
+                    model=model,
+                    messages=prompt_msgs,
+                    temperature=args.temperature,
+                    gold=gold,
+                    validate_fn=validate_gold,
+                    score_fn=score,
+                    num_ctx=args.num_ctx,
+                )
+                check_results["redundancy"] = asdict(rv)
+
+                # Pick the best valid attempt if it improves on the original
+                best_predicted = predicted
+                best_iou = m.modules_iou if m.json_valid else -1.0
+                upgraded = False
+                for attempt in rv.details.get("attempts", []):
+                    if not attempt.get("valid") or not attempt.get("parsed"):
+                        continue
+                    vs = attempt.get("vs_gold", {})
+                    attempt_iou = vs.get("modules_iou", 0)
+                    if attempt_iou > best_iou:
+                        best_iou = attempt_iou
+                        best_predicted = attempt.get("extraction")
+                        upgraded = True
+
+                if upgraded and best_predicted:
+                    m_new = score(gold, best_predicted)
+                    m_new.name = m.name
+                    m_new.tokens_in = m.tokens_in
+                    m_new.tokens_out = m.tokens_out
+                    m_new.validation_errors = validate_gold(best_predicted, name)
+                    check_results["redundancy_upgrade"] = {
+                        "original_modules_iou": m.modules_iou,
+                        "upgraded_modules_iou": m_new.modules_iou,
+                    }
+                    metrics_list[-1] = m_new
+                    m = m_new
+                    predicted = best_predicted
+                    rejected = False  # upgrade saved it
+            else:
+                check_results["redundancy"] = {"skipped": True, "reason": "validation passed"}
 
         checks_list.append(check_results if check_results else None)
+        latency_ms = (time.perf_counter() - t_start) * 1000
+        latency_list.append(latency_ms)
+        rejected_list.append(rejected)
+        retried_list.append(retried)
 
         # --- Console output ---
         print(f"  json_valid={m.json_valid}  type={m.type_match}  block={m.block_match}")
@@ -472,7 +504,11 @@ def main() -> int:
                     orig = ck_data.get("original_modules_iou", 0)
                     upgraded = ck_data.get("upgraded_modules_iou", 0)
                     print(f"  >> redundancy upgrade: modules_iou {orig:.2f} → {upgraded:.2f}")
-        print(f"  tokens in={m.tokens_in} out={m.tokens_out}")
+        if rejected:
+            print(f"  REJECTED")
+        if retried:
+            print(f"  retried via redundancy")
+        print(f"  tokens in={m.tokens_in} out={m.tokens_out}  latency={latency_ms:.0f}ms")
 
         # Save per-example JSON
         raw_path = out_dir / f"{name}.json"
@@ -538,6 +574,14 @@ def main() -> int:
         print(f"  schema valid: {schema_ok}/{n}")
         print(f"  validation errors total: {total_ve}")
 
+    # Day 7 quality metrics
+    n_rejected = sum(rejected_list)
+    n_retried = sum(retried_list)
+    avg_latency = sum(latency_list) / len(latency_list) if latency_list else 0
+    print(f"\n  rejected: {n_rejected}/{n}")
+    print(f"  retried (redundancy): {n_retried}/{n}")
+    print(f"  avg latency: {avg_latency:.0f}ms")
+
     # Day 7 confidence summary
     conf_values = [c for c in confidence_list if c is not None]
     if conf_values:
@@ -549,6 +593,14 @@ def main() -> int:
 
     tot_in = sum(m.tokens_in for m in metrics_list)
     tot_out = sum(m.tokens_out for m in metrics_list)
+    # Add tokens from external checks (redundancy extra calls)
+    for ck_data in checks_list:
+        if not ck_data:
+            continue
+        for ck_name, ck in ck_data.items():
+            if isinstance(ck, dict):
+                tot_in += ck.get("extra_tokens_in", 0)
+                tot_out += ck.get("extra_tokens_out", 0)
     print(f"  total tokens: in={tot_in} out={tot_out}")
 
     # Save summary JSON

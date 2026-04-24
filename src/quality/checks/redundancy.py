@@ -14,7 +14,7 @@ from dataclasses import asdict
 
 from src.quality.models import CheckVerdict
 
-TEMPERATURES = [0.0, 0.35, 0.7]
+TEMPERATURES = [0.15, 0.0]
 
 
 def _parse_json(content: str) -> dict | None:
@@ -139,15 +139,12 @@ def run(extraction: dict, *, client, model: str, messages: list[dict],
     extra_tokens_in = 0
     extra_tokens_out = 0
 
-    # Evaluate the initial extraction (from the main pipeline call)
-    # We don't know its exact temperature, but it's the "base" attempt
+    # Evaluate the initial extraction (from the main pipeline call at base temperature)
     attempts = []
+    attempts.append(_evaluate(extraction, gold, temperature, validate_fn, score_fn))
 
-    # First attempt = initial extraction at pipeline temperature
-    attempts.append(_evaluate(extraction, gold, 0.0, validate_fn, score_fn))
-
-    # Additional calls at remaining temperatures
-    for temp in TEMPERATURES[1:]:
+    # Additional calls at different temperatures
+    for temp in TEMPERATURES:
         kwargs: dict = dict(model=model, messages=messages, temperature=temp)
         if num_ctx is not None:
             kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
