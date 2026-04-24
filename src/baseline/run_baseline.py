@@ -107,7 +107,8 @@ def iou(a: set, b: set) -> float:
 
 
 def load_eval(jsonl_path: Path) -> list[tuple[str, list[dict]]]:
-    """Load examples from eval JSONL. Returns [(name, messages)]."""
+    """Load examples from JSONL. Returns [(name, messages)]."""
+    prefix = jsonl_path.stem  # "eval" or "train"
     out = []
     with jsonl_path.open(encoding="utf-8") as f:
         for i, line in enumerate(f, start=1):
@@ -115,7 +116,7 @@ def load_eval(jsonl_path: Path) -> list[tuple[str, list[dict]]]:
             if not line:
                 continue
             ex = json.loads(line)
-            out.append((f"eval_{i:02d}", ex["messages"]))
+            out.append((f"{prefix}_{i:02d}", ex["messages"]))
     return out
 
 
