@@ -112,23 +112,23 @@ python -m src.quality.run_quality --dry-run
 
 # Только constraint check (без API, мгновенно)
 python -m src.quality.run_quality --checks constraint \
-    --provider ollama --model qwen2.5:14b-instruct
+    --provider ollama --model qwen2.5:7b-instruct
 
 # Constraint + scoring (без redundancy — экономим 2 вызова)
 python -m src.quality.run_quality --checks constraint,scoring \
-    --provider ollama --model qwen2.5:14b-instruct
+    --provider ollama --model qwen2.5:7b-instruct
 
 # Полный pipeline (все 3 проверки)
 python -m src.quality.run_quality \
-    --provider ollama --model qwen2.5:14b-instruct
+    --provider ollama --model qwen2.5:7b-instruct
 
 # На другом наборе данных
 python -m src.quality.run_quality --input-set edge_cases \
-    --provider ollama --model qwen2.5:14b-instruct
+    --provider ollama --model qwen2.5:7b-instruct
 
 # На всех наборах сразу
 python -m src.quality.run_quality --input-set all \
-    --provider ollama --model qwen2.5:14b-instruct
+    --provider ollama --model qwen2.5:7b-instruct
 
 # OpenAI / OpenRouter
 python -m src.quality.run_quality --model gpt-4o-mini

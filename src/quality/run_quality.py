@@ -37,7 +37,7 @@ INPUT_SETS = {
     "edge_cases": ROOT / "data" / "quality" / "inputs" / "edge_cases.jsonl",
     "noisy": ROOT / "data" / "quality" / "inputs" / "noisy.jsonl",
 }
-VALID_CHECKS = {"constraint", "redundancy", "scoring"}
+VALID_CHECKS = {"constraint", "redundancy", "scoring", "scoring_cot"}
 
 
 def main() -> int:
@@ -56,12 +56,16 @@ def main() -> int:
                     default="auto")
     ap.add_argument("--num-ctx", type=int, default=None,
                     help="Context window (Ollama only)")
-    ap.add_argument("--checks", default="constraint,redundancy,scoring",
+    ap.add_argument("--checks", default="constraint,redundancy,scoring,scoring_cot",
                     help="Comma-separated checks to run (default: all)")
     ap.add_argument("--redundancy-n", type=int, default=3,
                     help="Number of total calls for redundancy check (default: 3)")
     ap.add_argument("--max-retries", type=int, default=2,
                     help="Max retries on constraint failure (default: 2)")
+    ap.add_argument("--redundancy-temperature", type=float, default=0.7,
+                    help="Temperature for redundancy calls (default: 0.7)")
+    ap.add_argument("--no-run-all", action="store_true",
+                    help="Stop pipeline early on FAIL (default: run all checks)")
     args = ap.parse_args()
 
     # Parse checks
@@ -76,6 +80,8 @@ def main() -> int:
         checks=checks,
         max_retries=args.max_retries,
         redundancy_n=args.redundancy_n,
+        redundancy_temperature=args.redundancy_temperature,
+        run_all_checks=not args.no_run_all,
     )
 
     # Load env
@@ -197,16 +203,50 @@ def main() -> int:
             print(f"  status: {r.status}  attempts: {r.attempts}  "
                   f"api_calls: {r.total_api_calls}  latency: {r.total_latency_ms:.0f}ms")
             for v in r.verdicts:
-                detail_str = ""
                 if v.check_name == "constraint":
                     errs = v.details.get("schema_errors", [])
                     warns = v.details.get("invariant_warnings", [])
-                    detail_str = f"  errors={len(errs)} warnings={len(warns)}"
+                    print(f"    constraint: {v.status}  errors={len(errs)} warnings={len(warns)}")
                 elif v.check_name == "redundancy":
-                    detail_str = f"  consensus={v.details.get('consensus', '?')}"
+                    attempts = v.details.get("attempts", [])
+                    n_passed = v.details.get("n_passed", "?")
+                    n_total = v.details.get("n_total", "?")
+                    print(f"    redundancy: {v.status}  passed={n_passed}/{n_total}")
+                    for a in attempts:
+                        temp = a.get("temperature", "?")
+                        if not a.get("parsed"):
+                            print(f"      T={temp}: JSON parse failed")
+                            continue
+                        passed = "PASS" if a.get("pass") else "FAIL"
+                        valid = "yes" if a.get("valid") else "NO"
+                        vs_gold = a.get("vs_gold", {})
+                        gold_str = ""
+                        if vs_gold:
+                            gold_str = (f" modules_iou={vs_gold.get('modules_iou', 0):.2f}"
+                                        f" type={'ok' if vs_gold.get('type_match') else 'MISS'}"
+                                        f" block={'ok' if vs_gold.get('block_match') else 'MISS'}")
+                        failed = a.get("failed_fields", [])
+                        fail_str = f"  [{', '.join(failed)}]" if failed else ""
+                        print(f"      T={temp}: {passed}  schema={valid}{gold_str}{fail_str}")
                 elif v.check_name == "scoring":
-                    detail_str = f"  reasoning={v.details.get('reasoning', '?')[:60]}"
-                print(f"    {v.check_name}: {v.status}{detail_str}")
+                    fc = v.details.get("field_confidence", {})
+                    fields_str = " ".join(f"{k}={fv}" for k, fv in fc.items() if fv != "OK")
+                    reasoning = v.details.get("reasoning", "")
+                    print(f"    scoring: {v.status}  {fields_str or 'all fields OK'}")
+                    if reasoning:
+                        print(f"      reasoning: {reasoning}")
+                elif v.check_name == "scoring_cot":
+                    fc = v.details.get("field_confidence", {})
+                    fr = v.details.get("field_reasoning", {})
+                    fields_str = " ".join(f"{k}={fv}" for k, fv in fc.items() if fv != "OK")
+                    print(f"    scoring_cot: {v.status}  {fields_str or 'all fields OK'}")
+                    summary = v.details.get("summary", "")
+                    if summary:
+                        print(f"      summary: {summary}")
+                    for field_name, reason in fr.items():
+                        verdict = fc.get(field_name, "?")
+                        if verdict != "OK" and reason:
+                            print(f"      {field_name} ({verdict}): {reason}")
 
             if r.baseline_metrics:
                 bm = r.baseline_metrics

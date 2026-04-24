@@ -28,3 +28,4 @@ data/mlx/
 src/ft_client/last_*.json
 /data/baseline/train/
 /data/baseline/eval/
+/data/quality/eval/

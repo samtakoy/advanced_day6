@@ -42,3 +42,4 @@ class PipelineConfig:
     redundancy_n: int = 3
     redundancy_temperature: float = 0.7
     scoring_temperature: float = 0.0
+    run_all_checks: bool = True  # run every check regardless of prior FAILs

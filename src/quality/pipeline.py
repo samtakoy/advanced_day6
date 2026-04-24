@@ -23,21 +23,37 @@ import time
 from dataclasses import asdict
 
 from src.quality.models import CheckVerdict, PipelineConfig, PipelineResult
-from src.quality.checks import constraint, redundancy, scoring
+from src.quality.checks import constraint, redundancy, scoring, scoring_cot
 
 
 def _parse_json(content: str) -> dict | None:
+    if not content:
+        return None
     try:
-        return json.loads(content)
+        obj = json.loads(content)
+        if isinstance(obj, dict):
+            return obj
     except (json.JSONDecodeError, TypeError):
         pass
-    if content:
-        m = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(1))
-            except json.JSONDecodeError:
-                pass
+    # Closed markdown block: ```json ... ```
+    m = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
+    if m:
+        try:
+            obj = json.loads(m.group(1))
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+    # First { to last }
+    first = content.find("{")
+    last = content.rfind("}")
+    if first != -1 and last > first:
+        try:
+            obj = json.loads(content[first:last + 1])
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
     return None
 
 
@@ -111,14 +127,25 @@ def run_pipeline(
             break
 
         if extraction is None:
-            # JSON parse failed — if constraint is active, this is a constraint FAIL
+            # JSON parse failed — try to get a useful error message
+            parse_error = "JSON parse failed"
+            try:
+                # Try to extract JSON substring to get specific error
+                first_brace = raw.find("{")
+                last_brace = raw.rfind("}")
+                if first_brace != -1 and last_brace > first_brace:
+                    json.loads(raw[first_brace:last_brace + 1])
+            except json.JSONDecodeError as e:
+                parse_error = f"JSON parse failed: {e.msg} (pos {e.pos})"
+
             if "constraint" in config.checks:
                 v = CheckVerdict(
                     check_name="constraint", status="FAIL",
-                    details={"schema_errors": ["JSON parse failed"],
+                    details={"schema_errors": [parse_error],
                              "invariant_warnings": []})
                 all_verdicts.append(v)
-                print(f"  [{name}] attempt {attempt}: JSON parse failed, retrying...")
+                print(f"  [{name}] attempt {attempt}: {parse_error}\n"
+                      f"    raw response (first 300): {raw[:300]}")
                 continue
             else:
                 result.error = "JSON parse failed"
@@ -146,6 +173,7 @@ def run_pipeline(
 
         # --- Redundancy check ---
         if "redundancy" in config.checks and client:
+            from src.validator.validate import validate_gold as _validate_gold
             v = redundancy.run(
                 extraction,
                 client=client,
@@ -154,6 +182,9 @@ def run_pipeline(
                 temperature=config.redundancy_temperature,
                 n=config.redundancy_n,
                 num_ctx=num_ctx,
+                gold=gold,
+                validate_fn=_validate_gold,
+                score_fn=score_fn,
             )
             all_verdicts.append(v)
             total_calls += v.extra_calls
@@ -168,8 +199,23 @@ def run_pipeline(
                 result.status = "REJECTED"
 
         # --- Scoring check ---
-        if "scoring" in config.checks and client and result.status != "REJECTED":
+        if "scoring" in config.checks and client and (config.run_all_checks or result.status != "REJECTED"):
             v = scoring.run(
+                result.final_extraction,
+                client=client,
+                model=model,
+                messages=messages,
+                temperature=config.scoring_temperature,
+                num_ctx=num_ctx,
+            )
+            all_verdicts.append(v)
+            total_calls += v.extra_calls
+            total_tok_in += v.extra_tokens_in
+            total_tok_out += v.extra_tokens_out
+
+        # --- Scoring COT check ---
+        if "scoring_cot" in config.checks and client and (config.run_all_checks or result.status != "REJECTED"):
+            v = scoring_cot.run(
                 result.final_extraction,
                 client=client,
                 model=model,
