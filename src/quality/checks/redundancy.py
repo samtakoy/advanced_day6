@@ -164,6 +164,9 @@ def run(extraction: dict, *, client, model: str, messages: list[dict],
             parsed = _parse_json(content)
             if parsed and not isinstance(parsed, dict):
                 parsed = None
+            # Unwrap extraction wrapper if present
+            if parsed and "extraction" in parsed and isinstance(parsed["extraction"], dict):
+                parsed = parsed["extraction"]
         except Exception as e:
             print(f"  [redundancy] API error at T={temp}: {e}")
 

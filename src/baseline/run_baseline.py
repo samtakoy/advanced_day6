@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
 """Run baseline evaluation for extraction fine-tune dataset.
 
-Sends system+user from eval.jsonl to the model, parses the JSON response,
-and computes per-field metrics against gold answers.
-
-Metrics:
-    - type:     exact match (0 or 1)
-    - block:    exact match (0 or 1)
-    - modules:  IoU (Jaccard similarity of sets)
-    - dependsOn: IoU (Jaccard similarity of sets)
-    - acceptanceCriteria: recall (semantic — count of gold items covered)
-    - outOfScope: precision (no hallucinated items)
-    - JSON parse: success/fail
+Day 6 mode: sends system+user from eval.jsonl, parses JSON, scores vs gold.
+Day 7 mode: adds confidence estimation via --self-score, --self-explain,
+            and external checks via --checks constraint,redundancy.
 
 Usage:
+    # Day 6 baseline
     python -m src.baseline.run_baseline --dry-run
     python -m src.baseline.run_baseline
     python -m src.baseline.run_baseline --provider ollama --model qwen2.5:14b-instruct
-    python -m src.baseline.run_baseline --limit 3
+
+    # Day 7 — self-score
+    python -m src.baseline.run_baseline --self-score
+    python -m src.baseline.run_baseline --self-explain
+
+    # Day 7 — with external checks
+    python -m src.baseline.run_baseline --self-score --checks constraint,redundancy
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
@@ -37,6 +37,27 @@ if str(ROOT) not in sys.path:
 from src.utils import model_slug  # noqa: E402
 from src.validator.validate import validate_gold  # noqa: E402
 
+VALID_CHECKS = {"constraint", "redundancy"}
+
+# --- Prompt suffixes for Day 7 modes ---
+
+SUFFIX_BASE = (
+    '\n\nВерни ответ в формате JSON с корневым полем "extraction", '
+    'содержащим JSON по схеме выше.'
+)
+
+SUFFIX_SELF_SCORE = (
+    '\nДобавь поле "confidence" со значением OK, UNSURE или FAIL '
+    '— насколько ты уверен в результате.'
+)
+
+SUFFIX_SELF_EXPLAIN = (
+    '\nДобавь поле "reasoning" (строка) — объясни логику своего решения, '
+    'почему оно хорошее и именно такое.'
+)
+
+
+# --- Data classes ---
 
 @dataclass
 class ExampleMetrics:
@@ -56,6 +77,8 @@ class ExampleMetrics:
     gold: dict = field(default_factory=dict)
     predicted: dict = field(default_factory=dict)
 
+
+# --- Helpers ---
 
 def iou(a: set, b: set) -> float:
     if not a and not b:
@@ -99,7 +122,6 @@ def score(gold: dict, predicted: dict) -> ExampleMetrics:
     pred_deps = set(predicted.get("dependsOn", []))
     m.depends_on_iou = iou(gold_deps, pred_deps)
 
-    # acceptanceCriteria recall: fraction of gold items present in prediction (exact match)
     gold_ac = gold.get("acceptanceCriteria", [])
     pred_ac = predicted.get("acceptanceCriteria", [])
     if gold_ac:
@@ -108,7 +130,6 @@ def score(gold: dict, predicted: dict) -> ExampleMetrics:
     else:
         m.ac_recall = 1.0 if not pred_ac else 0.0
 
-    # outOfScope precision: fraction of predicted items that are in gold
     gold_oos = set(predicted.get("outOfScope", []))
     pred_oos_list = predicted.get("outOfScope", [])
     if pred_oos_list:
@@ -130,7 +151,6 @@ def call_api(client, model: str, messages: list[dict],
         temperature=temperature,
     )
     if num_ctx is not None:
-        # Ollama OpenAI-compat API принимает extra_body для специфичных параметров
         kwargs["extra_body"] = {"options": {"num_ctx": num_ctx}}
     for attempt in range(retries):
         try:
@@ -143,6 +163,57 @@ def call_api(client, model: str, messages: list[dict],
             time.sleep(wait)
     raise last_err  # type: ignore[misc]
 
+
+def parse_response(content: str) -> tuple[dict | None, str | None, str | None]:
+    """Parse model response. Returns (predicted, confidence, reasoning).
+
+    Always looks for 'extraction' wrapper. Falls back to raw JSON.
+    """
+    parsed = None
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+        if parsed is None:
+            first = content.find("{")
+            last = content.rfind("}")
+            if first != -1 and last > first:
+                try:
+                    parsed = json.loads(content[first:last + 1])
+                except json.JSONDecodeError:
+                    pass
+
+    if parsed is None or not isinstance(parsed, dict):
+        return None, None, None
+
+    if "extraction" in parsed and isinstance(parsed["extraction"], dict):
+        predicted = parsed["extraction"]
+        confidence = parsed.get("confidence")
+        reasoning = parsed.get("reasoning")
+    else:
+        predicted = parsed
+        confidence = None
+        reasoning = None
+
+    return predicted, confidence, reasoning
+
+
+def build_system_prompt(base_content: str, self_score: bool, self_explain: bool) -> str:
+    """Append Day 7 suffixes to the base system prompt."""
+    prompt = base_content + SUFFIX_BASE
+    if self_score:
+        prompt += SUFFIX_SELF_SCORE
+    if self_explain:
+        prompt += SUFFIX_SELF_EXPLAIN
+    return prompt
+
+
+# --- Main ---
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run extraction baseline evaluation")
@@ -158,9 +229,27 @@ def main() -> int:
     ap.add_argument("--provider", choices=["auto", "openai", "openrouter", "ollama"],
                     default="auto")
     ap.add_argument("--num-ctx", type=int, default=None,
-                    help="Context window size (Ollama only). Default: model's default (~32K). "
-                         "For extraction 4096 is enough.")
+                    help="Context window size (Ollama only).")
+    # Day 7 flags
+    ap.add_argument("--self-score", action="store_true",
+                    help="Ask model to return confidence (OK/UNSURE/FAIL) with extraction")
+    ap.add_argument("--self-explain", action="store_true",
+                    help="Ask model to explain reasoning with extraction")
+    ap.add_argument("--checks", default=None,
+                    help="External checks: constraint,redundancy (comma-separated)")
     args = ap.parse_args()
+
+    # Parse checks
+    checks: list[str] = []
+    if args.checks:
+        checks = [c.strip() for c in args.checks.split(",")]
+        for c in checks:
+            if c not in VALID_CHECKS:
+                print(f"error: unknown check '{c}'. Valid: {sorted(VALID_CHECKS)}",
+                      file=sys.stderr)
+                return 2
+
+    day7_mode = args.self_score or args.self_explain or bool(checks)
 
     try:
         from dotenv import load_dotenv
@@ -190,7 +279,6 @@ def main() -> int:
         print(f"error: {env_var} not set", file=sys.stderr)
         return 2
 
-    # Output dir: data/baseline/eval/<model-slug>/
     source = args.from_jsonl.stem
     out_dir = args.out_dir / source / model_slug(args.model)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -216,21 +304,44 @@ def main() -> int:
         else:
             client = OpenAI(api_key=api_key)
         print(f"Provider: {provider}  model: {model}")
+        if day7_mode:
+            flags = []
+            if args.self_score:
+                flags.append("self-score")
+            if args.self_explain:
+                flags.append("self-explain")
+            if checks:
+                flags.append(f"checks={','.join(checks)}")
+            print(f"Day 7 mode: {', '.join(flags)}")
 
     metrics_list: list[ExampleMetrics] = []
+    # Day 7 extras stored per-example
+    confidence_list: list[str | None] = []
+    reasoning_list: list[str | None] = []
+    checks_list: list[dict | None] = []
 
     for name, messages in examples:
-        # Extract system + user (first 2 messages), gold from assistant (3rd)
         prompt_msgs = [
             {"role": messages[0]["role"], "content": messages[0]["content"]},
             {"role": messages[1]["role"], "content": messages[1]["content"]},
         ]
         gold = json.loads(messages[2]["content"])
 
+        # Build system prompt with Day 7 suffixes
+        if day7_mode:
+            prompt_msgs[0] = {
+                "role": "system",
+                "content": build_system_prompt(
+                    messages[0]["content"], args.self_score, args.self_explain),
+            }
+
         print(f"\n--- {name} (gold.title={gold.get('title', '?')[:50]}) ---")
 
         if args.dry_run:
             print(f"  would call {model} via {provider}, temperature={args.temperature}")
+            confidence_list.append(None)
+            reasoning_list.append(None)
+            checks_list.append(None)
             continue
 
         try:
@@ -240,24 +351,13 @@ def main() -> int:
             print(f"  [ERROR] {e}", file=sys.stderr)
             m = ExampleMetrics(name=name, error=str(e))
             metrics_list.append(m)
+            confidence_list.append(None)
+            reasoning_list.append(None)
+            checks_list.append(None)
             continue
 
-        choice = resp.choices[0]
-        content = choice.message.content or ""
-
-        # Try to parse JSON from response
-        predicted = None
-        try:
-            predicted = json.loads(content)
-        except json.JSONDecodeError:
-            # Try to extract JSON from markdown code block
-            import re
-            json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
-            if json_match:
-                try:
-                    predicted = json.loads(json_match.group(1))
-                except json.JSONDecodeError:
-                    pass
+        content = resp.choices[0].message.content or ""
+        predicted, confidence, reasoning = parse_response(content)
 
         if predicted is not None and isinstance(predicted, dict):
             m = score(gold, predicted)
@@ -271,50 +371,150 @@ def main() -> int:
         m.tokens_in = resp.usage.prompt_tokens
         m.tokens_out = resp.usage.completion_tokens
         metrics_list.append(m)
+        confidence_list.append(confidence)
+        reasoning_list.append(reasoning)
 
-        # Save raw response
-        raw_path = out_dir / f"{name}.json"
-        with raw_path.open("w", encoding="utf-8") as f:
-            json.dump({
-                "name": name,
-                "provider": provider,
-                "model": model,
-                "temperature": args.temperature,
-                "input_messages": prompt_msgs,
-                "response_content": content,
-                "gold": gold,
-                "predicted": predicted,
-                "metrics": {
-                    "json_valid": m.json_valid,
-                    "type_match": m.type_match,
-                    "block_match": m.block_match,
-                    "modules_iou": m.modules_iou,
-                    "new_modules_iou": m.new_modules_iou,
-                    "depends_on_iou": m.depends_on_iou,
-                    "ac_recall": m.ac_recall,
-                    "oos_precision": m.oos_precision,
-                },
-                "validation_errors": m.validation_errors,
-                "usage": {
-                    "prompt_tokens": resp.usage.prompt_tokens,
-                    "completion_tokens": resp.usage.completion_tokens,
-                },
-            }, f, ensure_ascii=False, indent=2)
+        # --- External checks ---
+        check_results: dict = {}
 
+        if predicted is not None and "constraint" in checks:
+            from src.quality.checks.constraint import run as constraint_run
+            cv = constraint_run(predicted)
+            check_results["constraint"] = asdict(cv)
+
+        if "redundancy" in checks:
+            from src.quality.checks.redundancy import run as redundancy_run
+
+            rv = redundancy_run(
+                predicted,
+                client=client,
+                model=model,
+                messages=prompt_msgs,
+                gold=gold,
+                validate_fn=validate_gold,
+                score_fn=score,
+                num_ctx=args.num_ctx,
+            )
+            check_results["redundancy"] = asdict(rv)
+
+            # Pick the best valid attempt if it improves on the original
+            best_predicted = predicted
+            best_iou = m.modules_iou if m.json_valid else -1.0
+            upgraded = False
+            for attempt in rv.details.get("attempts", []):
+                if not attempt.get("valid") or not attempt.get("parsed"):
+                    continue
+                vs = attempt.get("vs_gold", {})
+                attempt_iou = vs.get("modules_iou", 0)
+                if attempt_iou > best_iou:
+                    best_iou = attempt_iou
+                    best_predicted = attempt.get("extraction")
+                    upgraded = True
+
+            if upgraded and best_predicted:
+                m_new = score(gold, best_predicted)
+                m_new.name = m.name
+                m_new.tokens_in = m.tokens_in
+                m_new.tokens_out = m.tokens_out
+                m_new.validation_errors = validate_gold(best_predicted, name)
+                check_results["redundancy_upgrade"] = {
+                    "original_modules_iou": m.modules_iou,
+                    "upgraded_modules_iou": m_new.modules_iou,
+                }
+                metrics_list[-1] = m_new
+                m = m_new
+                predicted = best_predicted
+
+        checks_list.append(check_results if check_results else None)
+
+        # --- Console output ---
         print(f"  json_valid={m.json_valid}  type={m.type_match}  block={m.block_match}")
         print(f"  modules_iou={m.modules_iou:.2f}  new_modules_iou={m.new_modules_iou:.2f}  deps_iou={m.depends_on_iou:.2f}")
         print(f"  ac_recall={m.ac_recall:.2f}  oos_precision={m.oos_precision:.2f}")
-        print(f"  validation_errors={len(m.validation_errors)}")
         if m.validation_errors:
+            print(f"  validation_errors={len(m.validation_errors)}")
             for ve in m.validation_errors[:5]:
                 print(f"    - {ve}")
+        if confidence is not None:
+            print(f"  self-confidence: {confidence}")
+        if reasoning is not None:
+            r_str = reasoning if isinstance(reasoning, str) else json.dumps(reasoning, ensure_ascii=False)
+            print(f"  self-reasoning: {r_str[:200]}")
+        if check_results:
+            for ck_name, ck_data in check_results.items():
+                status = ck_data.get("status", "?")
+                if ck_name == "constraint":
+                    errs = ck_data.get("details", {}).get("schema_errors", [])
+                    warns = ck_data.get("details", {}).get("invariant_warnings", [])
+                    print(f"  check.constraint: {status}  errors={len(errs)} warnings={len(warns)}")
+                elif ck_name == "redundancy":
+                    details = ck_data.get("details", {})
+                    n_passed = details.get("n_passed", "?")
+                    n_total = details.get("n_total", "?")
+                    print(f"  check.redundancy: {status}  passed={n_passed}/{n_total}")
+                    for a in details.get("attempts", []):
+                        temp = a.get("temperature", "?")
+                        if not a.get("parsed"):
+                            print(f"    T={temp}: JSON parse failed")
+                            continue
+                        passed = "PASS" if a.get("pass") else "FAIL"
+                        vs = a.get("vs_gold", {})
+                        gold_str = ""
+                        if vs:
+                            gold_str = (f" modules_iou={vs.get('modules_iou', 0):.2f}"
+                                        f" type={'ok' if vs.get('type_match') else 'MISS'}"
+                                        f" block={'ok' if vs.get('block_match') else 'MISS'}")
+                        failed = a.get("failed_fields", [])
+                        fail_str = f"  [{', '.join(failed)}]" if failed else ""
+                        print(f"    T={temp}: {passed}  schema={'yes' if a.get('valid') else 'NO'}"
+                              f"{gold_str}{fail_str}")
+                elif ck_name == "redundancy_upgrade":
+                    orig = ck_data.get("original_modules_iou", 0)
+                    upgraded = ck_data.get("upgraded_modules_iou", 0)
+                    print(f"  >> redundancy upgrade: modules_iou {orig:.2f} → {upgraded:.2f}")
         print(f"  tokens in={m.tokens_in} out={m.tokens_out}")
+
+        # Save per-example JSON
+        raw_path = out_dir / f"{name}.json"
+        example_data: dict = {
+            "name": name,
+            "provider": provider,
+            "model": model,
+            "temperature": args.temperature,
+            "input_messages": prompt_msgs,
+            "response_content": content,
+            "gold": gold,
+            "predicted": predicted,
+            "metrics": {
+                "json_valid": m.json_valid,
+                "type_match": m.type_match,
+                "block_match": m.block_match,
+                "modules_iou": m.modules_iou,
+                "new_modules_iou": m.new_modules_iou,
+                "depends_on_iou": m.depends_on_iou,
+                "ac_recall": m.ac_recall,
+                "oos_precision": m.oos_precision,
+            },
+            "validation_errors": m.validation_errors,
+            "usage": {
+                "prompt_tokens": resp.usage.prompt_tokens,
+                "completion_tokens": resp.usage.completion_tokens,
+            },
+        }
+        if confidence is not None:
+            example_data["confidence"] = confidence
+        if reasoning is not None:
+            example_data["reasoning"] = reasoning
+        if check_results:
+            example_data["checks"] = check_results
+        with raw_path.open("w", encoding="utf-8") as f:
+            json.dump(example_data, f, ensure_ascii=False, indent=2)
 
     if args.dry_run:
         print("\n(dry run — no outputs written)")
         return 0
 
-    # Aggregate summary
+    # --- Aggregate summary ---
     if not metrics_list:
         return 0
 
@@ -338,11 +538,20 @@ def main() -> int:
         print(f"  schema valid: {schema_ok}/{n}")
         print(f"  validation errors total: {total_ve}")
 
+    # Day 7 confidence summary
+    conf_values = [c for c in confidence_list if c is not None]
+    if conf_values:
+        print(f"\n  Self-confidence:")
+        for status in ("OK", "UNSURE", "FAIL"):
+            cnt = sum(1 for c in conf_values if str(c).upper() == status)
+            if cnt:
+                print(f"    {status}: {cnt}/{len(conf_values)}")
+
     tot_in = sum(m.tokens_in for m in metrics_list)
     tot_out = sum(m.tokens_out for m in metrics_list)
     print(f"  total tokens: in={tot_in} out={tot_out}")
 
-    # Save summary
+    # Save summary JSON
     summary = out_dir / "summary.json"
     with summary.open("w", encoding="utf-8") as f:
         json.dump([asdict(m) for m in metrics_list], f, ensure_ascii=False, indent=2)
@@ -350,22 +559,59 @@ def main() -> int:
 
     # Markdown summary
     summary_md = out_dir / "summary.md"
+    mode_str = ""
+    if day7_mode:
+        flags = []
+        if args.self_score:
+            flags.append("self-score")
+        if args.self_explain:
+            flags.append("self-explain")
+        if checks:
+            flags.append(f"checks={','.join(checks)}")
+        mode_str = f"  |  Day 7: {', '.join(flags)}"
+
     lines = [
-        f"# Extraction Baseline (provider={provider}, model={model}, T={args.temperature})",
+        f"# Extraction Baseline (provider={provider}, model={model}, T={args.temperature}{mode_str})",
         "",
         f"Examples: **{n}**  |  errors: **{n - nv}**  |  tokens: in={tot_in}, out={tot_out}",
         "",
-        "| # | type | block | modules IoU | deps IoU | AC recall | OoS prec | json |",
-        "|---|------|-------|-------------|----------|-----------|----------|------|",
     ]
-    for m in metrics_list:
-        lines.append(
+
+    # Table header
+    header = "| # | type | block | modules IoU | deps IoU | AC recall | OoS prec | json"
+    sep = "|---|------|-------|-------------|----------|-----------|----------|-----"
+    if args.self_score:
+        header += " | self"
+        sep += "|------"
+    if checks:
+        for ck in checks:
+            header += f" | {ck}"
+            sep += "|------"
+    header += " |"
+    sep += "|"
+    lines.extend([header, sep])
+
+    for i, m in enumerate(metrics_list):
+        row = (
             f"| {m.name} | {'ok' if m.type_match else 'MISS'} | "
             f"{'ok' if m.block_match else 'MISS'} | "
             f"{m.modules_iou:.2f} | {m.depends_on_iou:.2f} | "
             f"{m.ac_recall:.2f} | {m.oos_precision:.2f} | "
-            f"{'ok' if m.json_valid else 'FAIL'} |"
+            f"{'ok' if m.json_valid else 'FAIL'}"
         )
+        if args.self_score:
+            c = confidence_list[i] if i < len(confidence_list) else None
+            row += f" | {c or '-'}"
+        if checks:
+            ck_data = checks_list[i] if i < len(checks_list) else None
+            for ck in checks:
+                if ck_data and ck in ck_data:
+                    row += f" | {ck_data[ck].get('status', '?')}"
+                else:
+                    row += " | -"
+        row += " |"
+        lines.append(row)
+
     if nv:
         lines.extend([
             "",
@@ -375,6 +621,20 @@ def main() -> int:
             f"- AC recall: **{sum(m.ac_recall for m in valid)/nv:.3f}**",
             f"- OoS precision: **{sum(m.oos_precision for m in valid)/nv:.3f}**",
         ])
+
+    if conf_values:
+        lines.extend(["", "## Self-confidence"])
+        for status in ("OK", "UNSURE", "FAIL"):
+            cnt = sum(1 for c in conf_values if str(c).upper() == status)
+            if cnt:
+                lines.append(f"- {status}: **{cnt}/{len(conf_values)}**")
+
+    if any(r for r in reasoning_list if r):
+        lines.extend(["", "## Self-reasoning (per example)"])
+        for i, r in enumerate(reasoning_list):
+            if r and i < len(metrics_list):
+                lines.append(f"- **{metrics_list[i].name}**: {r[:200]}")
+
     with summary_md.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"  summary.md   -> {summary_md}")
