@@ -3,7 +3,7 @@
 Escalation heuristics:
   1. JSON parse failed (free)
   2. Constraint check FAIL — schema / domain errors (free)
-  3. Self-score confidence — model says UNSURE or FAIL (embedded in prompt)
+  3. Self-check confidence — model explains reasoning + scores itself (embedded in prompt)
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class RouterConfig:
     strong_model: str = "gpt-oss:20b"
     temperature: float = 0.3
     num_ctx: int | None = None
-    use_self_score: bool = False
+    use_self_check: bool = False
 
 
 @dataclass
@@ -74,7 +74,7 @@ def route_example(
     # --- Build system prompt ---
     system_content = messages[0]["content"]
     system_prompt = build_system_prompt(
-        system_content, self_score=config.use_self_score, self_explain=False)
+        system_content, self_score=False, self_explain=config.use_self_check)
 
     prompt_msgs = [
         {"role": "system", "content": system_prompt},
@@ -101,21 +101,28 @@ def route_example(
     # Heuristic 2: Constraint check
     if predicted is not None:
         verdict = constraint_run(predicted)
-        if verdict.status == "FAIL":
-            reasons.append(f"constraint_fail: {verdict.details.get('schema_errors', [])}")
+        if verdict.status in ("FAIL", "UNSURE"):
+            reasons.append(f"constraint_{verdict.status.lower()}: {verdict.details.get('schema_errors', []) or verdict.details.get('invariant_warnings', [])}")
 
-    # Heuristic 3: Self-score confidence
-    if config.use_self_score and predicted is not None and confidence is not None:
+    # Heuristic 3: Self-check confidence
+    if config.use_self_check and predicted is not None and confidence is not None:
         conf_upper = str(confidence).upper()
         if conf_upper in ("UNSURE", "FAIL"):
-            reasons.append(f"self_score_{conf_upper.lower()}")
+            reasons.append(f"self_check_{conf_upper.lower()}")
 
     # --- Step 3: Escalate or accept ---
     if reasons:
         result.routed_to = "strong"
         result.escalation_reasons = reasons
 
-        resp_strong = call_api(client, config.strong_model, prompt_msgs, config.temperature,
+        # Strong model always gets self_explain for better chain-of-thought
+        strong_system = build_system_prompt(system_content, self_score=False, self_explain=True)
+        strong_msgs = [
+            {"role": "system", "content": strong_system},
+            {"role": messages[1]["role"], "content": messages[1]["content"]},
+        ]
+
+        resp_strong = call_api(client, config.strong_model, strong_msgs, config.temperature,
                                num_ctx=config.num_ctx)
         strong_content = resp_strong.choices[0].message.content or ""
         result.strong_raw = strong_content

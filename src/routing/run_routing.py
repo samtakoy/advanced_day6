@@ -7,7 +7,7 @@ when confidence is low.
 Usage:
     python -m src.routing.run_routing --dry-run
     python -m src.routing.run_routing --provider ollama
-    python -m src.routing.run_routing --provider ollama --self-score
+    python -m src.routing.run_routing --provider ollama --self-check
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ from src.utils import model_slug  # noqa: E402
 def _build_run_slug(config: RouterConfig) -> str:
     """Build output directory name from config."""
     parts = [model_slug(config.cheap_model), "to", model_slug(config.strong_model)]
-    if config.use_self_score:
-        parts.append("selfscore")
+    if config.use_self_check:
+        parts.append("selfcheck")
     return "_".join(parts)
 
 
@@ -122,7 +122,7 @@ def _save_results(results: list[RoutingResult], out_dir: Path,
             "cheap_model": config.cheap_model,
             "strong_model": config.strong_model,
             "temperature": config.temperature,
-            "use_self_score": config.use_self_score,
+            "use_self_check": config.use_self_check,
             "provider": provider,
         },
         "aggregate": agg,
@@ -147,8 +147,8 @@ def _save_results(results: list[RoutingResult], out_dir: Path,
     # --- summary.md ---
     md_path = out_dir / "summary.md"
     flags = []
-    if config.use_self_score:
-        flags.append("self-score")
+    if config.use_self_check:
+        flags.append("self-check")
     flags_str = f"  |  Flags: {', '.join(flags)}" if flags else ""
 
     lines = [
@@ -211,7 +211,7 @@ def _save_results(results: list[RoutingResult], out_dir: Path,
     ])
     for r in results:
         m = r.metrics
-        reasons_str = ", ".join(r.split(":")[0] for r in r.escalation_reasons) if r.escalation_reasons else "-"
+        reasons_str = ", ".join(reason.split(":")[0] for reason in r.escalation_reasons) if r.escalation_reasons else "-"
         if m and not m.error:
             lines.append(
                 f"| {r.name} | {r.routed_to} | {reasons_str} | "
@@ -251,8 +251,8 @@ def main() -> int:
                     default="auto")
     ap.add_argument("--num-ctx", type=int, default=None,
                     help="Context window size (Ollama only)")
-    ap.add_argument("--self-score", action="store_true",
-                    help="Enable self-score confidence heuristic")
+    ap.add_argument("--self-check", action="store_true",
+                    help="Enable self-check confidence heuristic")
     args = ap.parse_args()
 
     try:
@@ -285,7 +285,7 @@ def main() -> int:
         strong_model=args.strong_model,
         temperature=args.temperature,
         num_ctx=args.num_ctx,
-        use_self_score=args.self_score,
+        use_self_check=args.self_check,
     )
 
     run_slug = _build_run_slug(config)
@@ -309,7 +309,7 @@ def main() -> int:
     print(f"  Cheap:  {config.cheap_model}")
     print(f"  Strong: {config.strong_model}")
     print(f"  Provider: {provider}  T={config.temperature}")
-    if config.use_self_score:
+    if config.use_self_check:
         print(f"  Self-score: enabled")
     print(f"  Examples: {len(examples)}")
     print(f"  Output: {out_dir}")
