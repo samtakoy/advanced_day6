@@ -20,6 +20,7 @@ def log_turn(
     assistant_reply: str,
     user_id: str = "ANON",
     guard_alerts: list[str] | None = None,
+    prompt_mode: str = "hardened",
 ) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOGS_DIR / f"{session_id}.jsonl"
@@ -27,6 +28,7 @@ def log_turn(
         "ts": datetime.now(timezone.utc).isoformat(),
         "turn": turn,
         "user_id": user_id,
+        "prompt_mode": prompt_mode,
         "user_message": user_message,
         "tool_calls": tool_calls,
         "assistant_reply": assistant_reply,

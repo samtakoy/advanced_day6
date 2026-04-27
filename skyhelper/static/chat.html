@@ -85,11 +85,16 @@
     <label>X-User-Id: <input id="userid" value="DEMO_USER" style="font-family:ui-monospace;width:140px;padding:2px 6px"></label>
     <button id="reset" type="button" style="padding:2px 10px;background:#888;font-size:0.85em">Новая сессия</button>
   </div>
+  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+    <span>Промпт:</span>
+    <label><input type="radio" name="prompt_mode" value="naive"> Обычный</label>
+    <label><input type="radio" name="prompt_mode" value="hardened" checked> Усиленный</label>
+  </div>
   <div id="history"></div>
   <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
   <div>
     <button id="send">Отправить</button>
-    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code></span>
+    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code></span>
   </div>
   <script>
     let sessionId = null;
@@ -98,14 +103,33 @@
     const sendBtn = document.getElementById('send');
     const sidLabel = document.getElementById('sid');
     const uidLabel = document.getElementById('uid');
+    const pmodeLabel = document.getElementById('pmode');
     const userIdInput = document.getElementById('userid');
     const bearerInput = document.getElementById('bearer');
     const resetBtn = document.getElementById('reset');
+    const promptModeRadios = document.querySelectorAll('input[name="prompt_mode"]');
 
     bearerInput.value = localStorage.getItem('bearer') || '';
     bearerInput.addEventListener('input', () => {
       localStorage.setItem('bearer', bearerInput.value);
     });
+
+    const savedMode = localStorage.getItem('prompt_mode') || 'hardened';
+    for (const r of promptModeRadios) {
+      r.checked = (r.value === savedMode);
+      r.addEventListener('change', () => {
+        if (r.checked) {
+          localStorage.setItem('prompt_mode', r.value);
+          pmodeLabel.textContent = r.value;
+        }
+      });
+    }
+    pmodeLabel.textContent = savedMode;
+
+    function currentPromptMode() {
+      for (const r of promptModeRadios) if (r.checked) return r.value;
+      return 'hardened';
+    }
 
     function refreshUidLabelFromInput() {
       // Звёздочка означает «значение из поля, ещё не подтверждено сервером».
@@ -191,7 +215,11 @@
         const r = await fetch('/chat', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ session_id: sessionId, message: msg }),
+          body: JSON.stringify({
+            session_id: sessionId,
+            message: msg,
+            prompt_mode: currentPromptMode(),
+          }),
         });
         if (!r.ok) {
           let detail = '';
@@ -204,6 +232,7 @@
         sidLabel.textContent = sessionId.slice(0, 8) + '…';
         uidLabel.textContent = data.user_id;
         uidLabel.style.opacity = '1';
+        if (data.prompt_mode) pmodeLabel.textContent = data.prompt_mode;
         if (data.tool_calls && data.tool_calls.length > 0) {
           for (const tc of data.tool_calls) {
             appendToolCall(tc);

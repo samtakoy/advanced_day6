@@ -10,6 +10,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from typing import Literal
+
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -80,6 +82,7 @@ async def security_middleware(request: Request, call_next):
 class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str
+    prompt_mode: Literal["naive", "hardened"] = "hardened"
 
 
 class ToolCallRecord(BaseModel):
@@ -91,6 +94,7 @@ class ToolCallRecord(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     user_id: str
+    prompt_mode: str
     reply: str
     tool_calls: list[ToolCallRecord] = []
     guard_alerts: list[str] = []
@@ -116,7 +120,9 @@ async def chat(
     session.turn_count += 1
     policies.check_pending_timeout(session)
     session.history.append({"role": "user", "content": request.message})
-    reply, added, calls, alerts = llm.chat(session.history, session)
+    reply, added, calls, alerts = llm.chat(
+        session.history, session, prompt_mode=request.prompt_mode
+    )
     session.history.extend(added)
     audit.log_turn(
         session_id=session.session_id,
@@ -126,10 +132,12 @@ async def chat(
         assistant_reply=reply,
         user_id=session.user_id,
         guard_alerts=alerts,
+        prompt_mode=request.prompt_mode,
     )
     return ChatResponse(
         session_id=session.session_id,
         user_id=session.user_id,
+        prompt_mode=request.prompt_mode,
         reply=reply,
         tool_calls=[ToolCallRecord(**c) for c in calls],
         guard_alerts=alerts,
