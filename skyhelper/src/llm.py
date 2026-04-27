@@ -71,18 +71,24 @@ def _assistant_msg_to_dict(msg) -> dict:
     return result
 
 
-def chat(history: list[dict], session: Session) -> tuple[str, list[dict]]:
+def chat(
+    history: list[dict],
+    session: Session,
+) -> tuple[str, list[dict], list[dict]]:
     """Отправить историю в LLM, выполнить все tool-calls, вернуть финальный ответ.
 
     Session передаётся в диспетчер тулов — нужен для propose_booking
     (запись pending_booking) и book_flight (HITL-policy check).
 
     Returns:
-        (final_assistant_text, messages_added_this_turn)
+        (final_assistant_text, messages_added_this_turn, tool_calls_log)
+        где tool_calls_log — список {name, args, result} в порядке вызовов
+        (для UI-аудита и audit.log_turn).
     """
     messages = [{"role": "system", "content": load_system_prompt()}] + history
     tool_schemas = tools.build_tool_schemas()
     added_this_turn: list[dict] = []
+    tool_calls_log: list[dict] = []
 
     for _ in range(MAX_TOOL_LOOP_ITERATIONS):
         response = _get_client().chat.completions.create(
@@ -97,7 +103,7 @@ def chat(history: list[dict], session: Session) -> tuple[str, list[dict]]:
         added_this_turn.append(assistant_dict)
 
         if not msg.tool_calls:
-            return msg.content or "", added_this_turn
+            return msg.content or "", added_this_turn, tool_calls_log
 
         for tool_call in msg.tool_calls:
             tool_result = tools.dispatch(
@@ -105,6 +111,11 @@ def chat(history: list[dict], session: Session) -> tuple[str, list[dict]]:
                 tool_call.function.arguments,
                 session,
             )
+            tool_calls_log.append({
+                "name": tool_call.function.name,
+                "args": tool_call.function.arguments,
+                "result": tool_result,
+            })
             tool_msg = {
                 "role": "tool",
                 "tool_call_id": tool_call.id,

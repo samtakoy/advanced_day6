@@ -31,6 +31,17 @@
     .msg.user { color: #0066cc; }
     .msg.assistant { color: #1a1a1a; }
     .msg.error { color: #c00; font-style: italic; }
+    .msg.toolcall {
+      color: #666;
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+      font-size: 0.85em;
+      background: #f1f1f1;
+      border-left: 3px solid #888;
+      padding: 0.3em 0.6em;
+      margin-left: 1em;
+    }
+    .msg.toolcall .tc-result { color: #1a4a1a; }
+    .msg.toolcall.tc-error .tc-result { color: #aa2222; }
     .role { font-weight: 600; margin-right: 0.4em; }
     textarea {
       width: 100%;
@@ -84,6 +95,46 @@
       history.scrollTop = history.scrollHeight;
     }
 
+    function summarizeResult(resultStr) {
+      try {
+        const r = JSON.parse(resultStr);
+        if (r.error) return { text: '❌ ' + r.error, isError: true };
+        if (r.valid === false) return { text: '❌ invalid: ' + (r.reason || 'unknown'), isError: true };
+        if (r.valid === true) return { text: '✅ valid (discount=' + r.discount_percent + '%)', isError: false };
+        if (r.success) return { text: '✅ booking_id=' + r.booking_id + ', ' + r.final_price_rub + ' ₽', isError: false };
+        if (r.draft) return { text: '📋 draft: ' + r.draft.flight_id + ', ' + r.draft.final_price_rub + ' ₽', isError: false };
+        if (r.flights !== undefined) return { text: r.count + ' flights found', isError: false };
+        if (r.content !== undefined) return { text: '📄 ' + r.content.length + ' chars (' + (r.trust_level || 'data') + ')', isError: false };
+        return { text: JSON.stringify(r).slice(0, 100), isError: false };
+      } catch (e) {
+        return { text: (resultStr || '').slice(0, 100), isError: false };
+      }
+    }
+
+    function appendToolCall(tc) {
+      const div = document.createElement('div');
+      div.className = 'msg toolcall';
+
+      let argsStr = tc.args || '';
+      try { argsStr = JSON.stringify(JSON.parse(tc.args)); } catch (e) {}
+      if (argsStr.length > 100) argsStr = argsStr.slice(0, 97) + '...';
+
+      const summary = summarizeResult(tc.result);
+      if (summary.isError) div.classList.add('tc-error');
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'role';
+      labelSpan.textContent = '🔧 ' + tc.name + '(' + argsStr + ')';
+      div.appendChild(labelSpan);
+      div.appendChild(document.createTextNode(' → '));
+      const resultSpan = document.createElement('span');
+      resultSpan.className = 'tc-result';
+      resultSpan.textContent = summary.text;
+      div.appendChild(resultSpan);
+
+      history.appendChild(div);
+    }
+
     async function send() {
       const msg = input.value.trim();
       if (!msg) return;
@@ -103,6 +154,11 @@
         const data = await r.json();
         sessionId = data.session_id;
         sidLabel.textContent = sessionId.slice(0, 8) + '…';
+        if (data.tool_calls && data.tool_calls.length > 0) {
+          for (const tc of data.tool_calls) {
+            appendToolCall(tc);
+          }
+        }
         append('assistant', data.reply);
       } catch (e) {
         append('error', String(e));
