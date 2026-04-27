@@ -1,4 +1,4 @@
-"""Тонкая обёртка над OpenAI-совместимым API. Slice 1: без тулов.
+"""Тонкая обёртка над OpenAI-совместимым API с поддержкой native tool-calling.
 
 Auto-detect провайдера: если задан OPENROUTER_API_KEY — идём через OpenRouter,
 иначе — прямо в OpenAI. Та же логика, что и в src/baseline/run_baseline.py.
@@ -11,10 +11,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from skyhelper.src import tools
+
 load_dotenv()
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system.md"
+
+MAX_TOOL_LOOP_ITERATIONS = 10
 
 
 def _provider() -> str:
@@ -48,12 +52,65 @@ def load_system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def chat(history: list[dict]) -> str:
-    """Отправить историю в LLM и получить ответ ассистента."""
+def _assistant_msg_to_dict(msg) -> dict:
+    """Сериализовать assistant-сообщение из OpenAI SDK в plain dict для session-истории."""
+    result: dict = {"role": "assistant", "content": msg.content}
+    if msg.tool_calls:
+        result["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in msg.tool_calls
+        ]
+    return result
+
+
+def chat(history: list[dict]) -> tuple[str, list[dict]]:
+    """Отправить историю в LLM, выполнить все tool-calls, вернуть финальный ответ.
+
+    Mutates history in place: добавляет assistant-сообщения с tool_calls и
+    соответствующие tool-results, чтобы следующий турн видел весь контекст.
+
+    Returns:
+        (final_assistant_text, full_message_chain_added_this_turn)
+    """
     messages = [{"role": "system", "content": load_system_prompt()}] + history
-    response = _get_client().chat.completions.create(
-        model=_resolve_model(),
-        messages=messages,
-        temperature=0.3,
+    tool_schemas = tools.build_tool_schemas()
+    added_this_turn: list[dict] = []
+
+    for _ in range(MAX_TOOL_LOOP_ITERATIONS):
+        response = _get_client().chat.completions.create(
+            model=_resolve_model(),
+            messages=messages,
+            tools=tool_schemas,
+            temperature=0.3,
+        )
+        msg = response.choices[0].message
+        assistant_dict = _assistant_msg_to_dict(msg)
+        messages.append(assistant_dict)
+        added_this_turn.append(assistant_dict)
+
+        if not msg.tool_calls:
+            return msg.content or "", added_this_turn
+
+        for tool_call in msg.tool_calls:
+            tool_result = tools.dispatch(
+                tool_call.function.name,
+                tool_call.function.arguments,
+            )
+            tool_msg = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": tool_result,
+            }
+            messages.append(tool_msg)
+            added_this_turn.append(tool_msg)
+
+    raise RuntimeError(
+        f"Tool-call loop exceeded {MAX_TOOL_LOOP_ITERATIONS} iterations"
     )
-    return response.choices[0].message.content or ""

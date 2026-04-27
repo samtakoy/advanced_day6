@@ -1,4 +1,4 @@
-"""FastAPI-приложение SkyHelper. Slice 1: walking skeleton без тулов."""
+"""FastAPI-приложение SkyHelper. Slice 2: добавлен tool-call loop для search_flights."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,7 +11,7 @@ from skyhelper.src import llm, sessions
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="SkyHelper", version="0.1.0")
+app = FastAPI(title="SkyHelper", version="0.2.0")
 
 
 class ChatRequest(BaseModel):
@@ -38,6 +38,6 @@ async def healthz() -> dict:
 async def chat(request: ChatRequest) -> ChatResponse:
     session = sessions.get_or_create(request.session_id)
     session.history.append({"role": "user", "content": request.message})
-    reply = llm.chat(session.history)
-    session.history.append({"role": "assistant", "content": reply})
+    reply, added = llm.chat(session.history)
+    session.history.extend(added)
     return ChatResponse(session_id=session.session_id, reply=reply)
