@@ -1,29 +1,80 @@
 """FastAPI-приложение SkyHelper.
 
-Slice 5: header X-User-Id для multi-user threat model + seed-загрузка
-bookings из data/travel/seed_bookings.json при первом старте.
+Slice 7: добавлены Bearer-token auth и rate limit (per-token + per-userId)
+через middleware. Auth выключен, если SKYHELPER_BEARER_TOKEN не задан
+(dev-режим, лог-предупреждение при старте).
 """
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Header
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Header, Request
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from skyhelper.src import audit, llm, policies, sessions, tools
+from skyhelper.src import audit, llm, policies, security, sessions, tools
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+logger = logging.getLogger("skyhelper")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     tools.maybe_seed_bookings()
+    if not security.auth_enabled():
+        logger.warning(
+            "SKYHELPER_BEARER_TOKEN не задан — auth выключен (dev-режим). "
+            "Перед публичной экспозицией обязательно задать токен."
+        )
     yield
 
 
-app = FastAPI(title="SkyHelper", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="SkyHelper", version="0.7.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Rate limit + auth на /chat. Остальные маршруты (UI, healthz) — открытые.
+
+    Порядок: сначала rate limit (по присланному токену, даже невалидному),
+    потом auth. Иначе атакующий мог бы спамить невалидными токенами без
+    счётчика и нагружать сервер auth-проверками.
+    """
+    if request.url.path != "/chat":
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization")
+    token_key = security.extract_token(auth_header)
+    user_id = request.headers.get("X-User-Id", "ANON")
+
+    if not security.token_limiter.check(token_key):
+        return JSONResponse(
+            {
+                "detail": (
+                    f"Rate limit exceeded (per token): "
+                    f"{security.PER_TOKEN_LIMIT} requests / {security.WINDOW_SEC}s"
+                )
+            },
+            status_code=429,
+        )
+    if not security.user_limiter.check(user_id):
+        return JSONResponse(
+            {
+                "detail": (
+                    f"Rate limit exceeded (per user): "
+                    f"{security.PER_USER_LIMIT} requests / {security.WINDOW_SEC}s"
+                )
+            },
+            status_code=429,
+        )
+
+    if err := security.check_bearer(auth_header):
+        return JSONResponse({"detail": err}, status_code=401)
+
+    return await call_next(request)
 
 
 class ChatRequest(BaseModel):
@@ -52,7 +103,7 @@ async def index() -> FileResponse:
 
 @app.get("/healthz")
 async def healthz() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "auth_enabled": security.auth_enabled()}
 
 
 @app.post("/chat", response_model=ChatResponse)

@@ -80,9 +80,10 @@
 </head>
 <body>
   <h1>SkyHelper ✈️</h1>
-  <div class="meta" style="margin-bottom:0.5em">
-    <label>X-User-Id: <input id="userid" value="DEMO_USER" style="font-family:ui-monospace;width:160px;padding:2px 6px"></label>
-    <button id="reset" type="button" style="margin-left:0.5em;padding:2px 10px;background:#888;font-size:0.85em">Новая сессия</button>
+  <div class="meta" style="margin-bottom:0.5em;display:flex;gap:0.8em;flex-wrap:wrap;align-items:center">
+    <label>Bearer: <input id="bearer" type="password" placeholder="(пусто = dev)" style="font-family:ui-monospace;width:200px;padding:2px 6px"></label>
+    <label>X-User-Id: <input id="userid" value="DEMO_USER" style="font-family:ui-monospace;width:140px;padding:2px 6px"></label>
+    <button id="reset" type="button" style="padding:2px 10px;background:#888;font-size:0.85em">Новая сессия</button>
   </div>
   <div id="history"></div>
   <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
@@ -98,7 +99,13 @@
     const sidLabel = document.getElementById('sid');
     const uidLabel = document.getElementById('uid');
     const userIdInput = document.getElementById('userid');
+    const bearerInput = document.getElementById('bearer');
     const resetBtn = document.getElementById('reset');
+
+    bearerInput.value = localStorage.getItem('bearer') || '';
+    bearerInput.addEventListener('input', () => {
+      localStorage.setItem('bearer', bearerInput.value);
+    });
 
     function refreshUidLabelFromInput() {
       // Звёздочка означает «значение из поля, ещё не подтверждено сервером».
@@ -175,16 +182,21 @@
       input.value = '';
       sendBtn.disabled = true;
       try {
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-User-Id': (userIdInput.value || 'ANON').trim(),
+        };
+        const bearer = (bearerInput.value || '').trim();
+        if (bearer) headers['Authorization'] = 'Bearer ' + bearer;
         const r = await fetch('/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Id': (userIdInput.value || 'ANON').trim(),
-          },
+          headers,
           body: JSON.stringify({ session_id: sessionId, message: msg }),
         });
         if (!r.ok) {
-          append('error', 'HTTP ' + r.status);
+          let detail = '';
+          try { detail = ': ' + ((await r.json()).detail || ''); } catch (e) {}
+          append('error', 'HTTP ' + r.status + detail);
           return;
         }
         const data = await r.json();
