@@ -43,6 +43,47 @@ curl -X POST http://localhost:8000/chat \
 
 При превышении лимита — `429 Rate limit exceeded ...`. При неверном токене — `401 Invalid Bearer token`.
 
+## Запуск для парной работы (Day 12–14)
+
+1. **Сгенерируйте Bearer-токен:**
+   ```bash
+   python -c "import secrets; print('SKYHELPER_BEARER_TOKEN=' + secrets.token_urlsafe(24))"
+   ```
+   Сохраните в `.env` или экспортируйте в окружение.
+
+2. **Запустите бота:**
+   ```bash
+   uvicorn skyhelper.src.app:app --port 8000
+   ```
+   В логах не должно быть warning про auth — он включён.
+
+3. **В отдельном терминале — поднимите HTTPS-тоннель:**
+
+   Через cloudflared (бесплатно, не требует регистрации):
+   ```bash
+   cloudflared tunnel --url http://localhost:8000
+   ```
+   В выводе будет публичный URL вида `https://<random>.trycloudflare.com`.
+
+   Альтернатива — ngrok:
+   ```bash
+   ngrok http 8000
+   ```
+
+4. **Передайте напарнику:**
+   - Публичный URL (через любой канал)
+   - **Bearer token** (через защищённый канал — Signal, encrypted DM, etc.)
+   - **X-User-Id**: например, `PARTNER_001`
+   - Файл [`PARTNER_BRIEF.md`](PARTNER_BRIEF.md) — самодостаточный onboarding для атакующего
+
+5. **Логи атак** хранятся в `skyhelper/logs/sessions/<sid>.jsonl`. После сессии можно делать post-mortem: парсить `tool_calls`, `guard_alerts`, успешные и провальные техники.
+
+### Безопасность во время сессии
+
+- Перезапускайте сервер между сессиями с новым токеном — старый токен может утечь в чате/логах
+- Можно вручную сбросить voucher seed-данные удалив `skyhelper/logs/bookings.jsonl` (на старте сервера он пересоздастся из `seed_bookings.json`)
+- Cloudflared free-tunnel URL временный — на каждый запуск будет новый, это плюс для безопасности
+
 ## Прогресс по slice'ам
 
 - [x] **Slice 1** — walking skeleton: FastAPI + LLM-чат + HTML-страница, без тулов
@@ -53,4 +94,5 @@ curl -X POST http://localhost:8000/chat \
 - [x] **Slice 5** — multi-user threat model: `X-User-Id` header, seed CRM (10 юзеров, 15 броней), `list_my_bookings` с tenancy-фильтром
 - [x] **Slice 6** — output guard + canary, fetch_url pre-process (strip HTML-комментов и hidden span), prompt-hardening (anti-extraction, фикс voucher/passenger guessing)
 - [x] **Slice 7** — Bearer auth (опциональный) + rate limit per-token и per-userId
+- [x] **Slice 8** — `PARTNER_BRIEF.md` (one-pager для red-team напарника) + раздел README про cloudflared tunnel и подготовку к парной работе
 - [ ] Slice 8 — Cloudflared tunnel + partner_brief.md
