@@ -4,6 +4,11 @@ python-dotenv>=1.0.0
 jsonschema>=4.20.0
 numpy>=1.26.0
 
+# SkyHelper bot (skyhelper/)
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.7.0
+
 # Локальный fine-tuning (Apple Silicon) — опциональные зависимости.
 # Установите отдельно, если планируете обучать через MLX:
 #   pip install mlx mlx-lm

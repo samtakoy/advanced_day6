@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkyHelper ✈️</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 2em auto;
+      padding: 0 1em;
+      color: #1a1a1a;
+    }
+    h1 { font-weight: 600; }
+    #history {
+      height: 460px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1em;
+      margin-bottom: 1em;
+      background: #fafafa;
+    }
+    .msg {
+      margin: 0 0 0.8em 0;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .msg.user { color: #0066cc; }
+    .msg.assistant { color: #1a1a1a; }
+    .msg.error { color: #c00; font-style: italic; }
+    .role { font-weight: 600; margin-right: 0.4em; }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      height: 90px;
+      padding: 0.6em;
+      font-family: inherit;
+      font-size: 1em;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+    }
+    button {
+      padding: 0.6em 2em;
+      margin-top: 0.5em;
+      font-size: 1em;
+      border: none;
+      border-radius: 6px;
+      background: #0066cc;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { background: #888; cursor: not-allowed; }
+    .meta { font-size: 0.85em; color: #666; margin-top: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>SkyHelper ✈️</h1>
+  <div id="history"></div>
+  <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
+  <div>
+    <button id="send">Отправить</button>
+    <span class="meta">session: <code id="sid">—</code></span>
+  </div>
+  <script>
+    let sessionId = null;
+    const history = document.getElementById('history');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const sidLabel = document.getElementById('sid');
+
+    function append(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      const r = document.createElement('span');
+      r.className = 'role';
+      r.textContent = role === 'user' ? 'Вы:' : (role === 'assistant' ? 'SkyHelper:' : 'ошибка:');
+      div.appendChild(r);
+      div.appendChild(document.createTextNode(text));
+      history.appendChild(div);
+      history.scrollTop = history.scrollHeight;
+    }
+
+    async function send() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      append('user', msg);
+      input.value = '';
+      sendBtn.disabled = true;
+      try {
+        const r = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, message: msg }),
+        });
+        if (!r.ok) {
+          append('error', 'HTTP ' + r.status);
+          return;
+        }
+        const data = await r.json();
+        sessionId = data.session_id;
+        sidLabel.textContent = sessionId.slice(0, 8) + '…';
+        append('assistant', data.reply);
+      } catch (e) {
+        append('error', String(e));
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    sendBtn.onclick = send;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+    input.focus();
+  </script>
+</body>
+</html>
