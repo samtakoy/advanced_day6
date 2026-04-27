@@ -32,6 +32,6 @@ uvicorn skyhelper.src.app:app --reload --port 8000
 - [x] **Slice 4** — `fetch_url` + web_mock (3 clean + 3 poisoned) + URL allowlist через `index.json`
 - [x] **Slice 4.5** — audit-видимость: tool-calls в ChatResponse + UI-рендер + per-session jsonl лог
 - [x] **Slice 5** — multi-user threat model: `X-User-Id` header, seed CRM (10 юзеров, 15 броней), `list_my_bookings` с tenancy-фильтром
-- [ ] Slice 6 — output guard + canary
+- [x] **Slice 6** — output guard + canary, fetch_url pre-process (strip HTML-комментов и hidden span), prompt-hardening (anti-extraction, фикс voucher/passenger guessing)
 - [ ] Slice 7 — Bearer auth + rate limit
 - [ ] Slice 8 — Cloudflared tunnel + partner_brief.md

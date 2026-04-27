@@ -42,6 +42,16 @@
     }
     .msg.toolcall .tc-result { color: #1a4a1a; }
     .msg.toolcall.tc-error .tc-result { color: #aa2222; }
+    .msg.guardalert {
+      color: #aa2222;
+      font-weight: 600;
+      background: #ffe8e8;
+      border-left: 3px solid #c00;
+      padding: 0.3em 0.6em;
+      margin-left: 1em;
+      font-family: ui-monospace, monospace;
+      font-size: 0.85em;
+    }
     .role { font-weight: 600; margin-right: 0.4em; }
     textarea {
       width: 100%;
@@ -185,6 +195,14 @@
         if (data.tool_calls && data.tool_calls.length > 0) {
           for (const tc of data.tool_calls) {
             appendToolCall(tc);
+          }
+        }
+        if (data.guard_alerts && data.guard_alerts.length > 0) {
+          for (const alert of data.guard_alerts) {
+            const div = document.createElement('div');
+            div.className = 'msg guardalert';
+            div.textContent = '🚨 guard triggered: ' + alert;
+            history.appendChild(div);
           }
         }
         append('assistant', data.reply);

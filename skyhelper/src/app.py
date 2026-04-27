@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SkyHelper", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="SkyHelper", version="0.6.0", lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -42,6 +42,7 @@ class ChatResponse(BaseModel):
     user_id: str
     reply: str
     tool_calls: list[ToolCallRecord] = []
+    guard_alerts: list[str] = []
 
 
 @app.get("/")
@@ -64,7 +65,7 @@ async def chat(
     session.turn_count += 1
     policies.check_pending_timeout(session)
     session.history.append({"role": "user", "content": request.message})
-    reply, added, calls = llm.chat(session.history, session)
+    reply, added, calls, alerts = llm.chat(session.history, session)
     session.history.extend(added)
     audit.log_turn(
         session_id=session.session_id,
@@ -73,10 +74,12 @@ async def chat(
         tool_calls=calls,
         assistant_reply=reply,
         user_id=session.user_id,
+        guard_alerts=alerts,
     )
     return ChatResponse(
         session_id=session.session_id,
         user_id=session.user_id,
         reply=reply,
         tool_calls=[ToolCallRecord(**c) for c in calls],
+        guard_alerts=alerts,
     )

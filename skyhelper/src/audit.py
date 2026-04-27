@@ -19,6 +19,7 @@ def log_turn(
     tool_calls: list[dict],
     assistant_reply: str,
     user_id: str = "ANON",
+    guard_alerts: list[str] | None = None,
 ) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOGS_DIR / f"{session_id}.jsonl"
@@ -29,6 +30,7 @@ def log_turn(
         "user_message": user_message,
         "tool_calls": tool_calls,
         "assistant_reply": assistant_reply,
+        "guard_alerts": guard_alerts or [],
     }
     with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
