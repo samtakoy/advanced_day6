@@ -7,11 +7,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from skyhelper.src import llm, sessions
+from skyhelper.src import llm, policies, sessions
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="SkyHelper", version="0.2.0")
+app = FastAPI(title="SkyHelper", version="0.3.0")
 
 
 class ChatRequest(BaseModel):
@@ -37,7 +37,9 @@ async def healthz() -> dict:
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     session = sessions.get_or_create(request.session_id)
+    session.turn_count += 1
+    policies.check_pending_timeout(session)
     session.history.append({"role": "user", "content": request.message})
-    reply, added = llm.chat(session.history)
+    reply, added = llm.chat(session.history, session)
     session.history.extend(added)
     return ChatResponse(session_id=session.session_id, reply=reply)

@@ -33,3 +33,6 @@ src/ft_client/last_*.json
 /data/routing/
 /data/multistage/
 /data/micromodel/
+
+# SkyHelper runtime artifacts (bookings, session logs)
+/skyhelper/logs/

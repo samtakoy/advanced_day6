@@ -28,7 +28,7 @@ uvicorn skyhelper.src.app:app --reload --port 8000
 
 - [x] **Slice 1** — walking skeleton: FastAPI + LLM-чат + HTML-страница, без тулов
 - [x] **Slice 2** — `search_flights` end-to-end: native tool-calling loop, каталог рейсов
-- [ ] Slice 3 — booking flow (apply_voucher, propose_booking, book_flight + HITL)
+- [x] **Slice 3** — booking flow: apply_voucher / propose_booking / book_flight + HITL-гейт через `policies.check_book_flight`
 - [ ] Slice 4 — `fetch_url` + indirect injection setup
 - [ ] Slice 5 — `list_my_bookings` + multi-user (X-User-Id, seed)
 - [ ] Slice 6 — output guard + canary

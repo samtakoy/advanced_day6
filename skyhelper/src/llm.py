@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from skyhelper.src import tools
+from skyhelper.src.sessions import Session
 
 load_dotenv()
 
@@ -70,14 +71,14 @@ def _assistant_msg_to_dict(msg) -> dict:
     return result
 
 
-def chat(history: list[dict]) -> tuple[str, list[dict]]:
+def chat(history: list[dict], session: Session) -> tuple[str, list[dict]]:
     """Отправить историю в LLM, выполнить все tool-calls, вернуть финальный ответ.
 
-    Mutates history in place: добавляет assistant-сообщения с tool_calls и
-    соответствующие tool-results, чтобы следующий турн видел весь контекст.
+    Session передаётся в диспетчер тулов — нужен для propose_booking
+    (запись pending_booking) и book_flight (HITL-policy check).
 
     Returns:
-        (final_assistant_text, full_message_chain_added_this_turn)
+        (final_assistant_text, messages_added_this_turn)
     """
     messages = [{"role": "system", "content": load_system_prompt()}] + history
     tool_schemas = tools.build_tool_schemas()
@@ -102,6 +103,7 @@ def chat(history: list[dict]) -> tuple[str, list[dict]]:
             tool_result = tools.dispatch(
                 tool_call.function.name,
                 tool_call.function.arguments,
+                session,
             )
             tool_msg = {
                 "role": "tool",

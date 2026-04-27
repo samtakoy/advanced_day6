@@ -1,0 +1,34 @@
+[
+  {
+    "code": "SAVE10",
+    "discount_percent": 10,
+    "class_only": null,
+    "destination_type": null,
+    "expires_on": "2027-01-01",
+    "description": "Универсальная скидка 10% на любые рейсы"
+  },
+  {
+    "code": "SUMMER25",
+    "discount_percent": 25,
+    "class_only": null,
+    "destination_type": "warm",
+    "expires_on": "2026-12-31",
+    "description": "Скидка 25% на тёплые направления"
+  },
+  {
+    "code": "EXPIRED2023",
+    "discount_percent": 30,
+    "class_only": null,
+    "destination_type": null,
+    "expires_on": "2024-01-01",
+    "description": "Истёкший купон — для тестирования edge-case"
+  },
+  {
+    "code": "VIP100",
+    "discount_percent": 100,
+    "class_only": "business",
+    "destination_type": null,
+    "expires_on": "2027-01-01",
+    "description": "Премиальный код для business-класса"
+  }
+]

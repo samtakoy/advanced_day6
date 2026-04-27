@@ -1,20 +1,31 @@
 """Tools для SkyHelper: Pydantic-схемы args, реализация и dispatcher.
 
-Slice 2: только search_flights. Остальные тулы добавляются в следующих
-slice'ах одинаковым паттерном (схема + функция + регистрация в TOOLS).
+Slice 3: добавлены apply_voucher, propose_booking, book_flight (с HITL-гейтом
+через policies.check_book_flight). Все тулы принимают (args, session) для
+единообразия — большинству session не нужен, но некоторым обязателен.
 """
 from __future__ import annotations
 
 import json
+import random
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+from skyhelper.src import policies
+from skyhelper.src.sessions import BookingDraft, Session
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "travel"
+LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
+
 FLIGHTS_PATH = DATA_DIR / "flights.json"
+VOUCHERS_PATH = DATA_DIR / "vouchers.json"
+BOOKINGS_PATH = LOGS_DIR / "bookings.jsonl"
 
 _flights_cache: list[dict] | None = None
+_vouchers_cache: list[dict] | None = None
 
 
 def _load_flights() -> list[dict]:
@@ -22,6 +33,43 @@ def _load_flights() -> list[dict]:
     if _flights_cache is None:
         _flights_cache = json.loads(FLIGHTS_PATH.read_text(encoding="utf-8"))
     return _flights_cache
+
+
+def _load_vouchers() -> list[dict]:
+    global _vouchers_cache
+    if _vouchers_cache is None:
+        _vouchers_cache = json.loads(VOUCHERS_PATH.read_text(encoding="utf-8"))
+    return _vouchers_cache
+
+
+def _find_flight(flight_id: str) -> dict | None:
+    for f in _load_flights():
+        if f["id"] == flight_id:
+            return f
+    return None
+
+
+def _find_voucher(code: str) -> dict | None:
+    code_norm = (code or "").strip().upper()
+    for v in _load_vouchers():
+        if v["code"] == code_norm:
+            return v
+    return None
+
+
+def _is_expired(expires_on: str) -> bool:
+    return date.fromisoformat(expires_on) <= date.today()
+
+
+def _new_booking_id() -> str:
+    # Range 9000-9999, чтобы не пересекаться с seed_bookings (4000-4500).
+    return f"BC{random.randint(9000, 9999)}"
+
+
+def _append_booking(record: dict) -> None:
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    with BOOKINGS_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +95,8 @@ class SearchFlightsArgs(BaseModel):
     )
 
 
-def search_flights(args: SearchFlightsArgs) -> dict:
-    """Поиск one-way рейсов в каталоге по маршруту, дате, классу. Возвращает топ-10 совпадений, отсортированных по дате и цене."""
+def search_flights(args: SearchFlightsArgs, session: Session) -> dict:
+    """Поиск one-way рейсов в каталоге."""
     results = _load_flights()
     if args.from_city:
         needle = args.from_city.lower()
@@ -65,6 +113,172 @@ def search_flights(args: SearchFlightsArgs) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# apply_voucher
+# ---------------------------------------------------------------------------
+
+class ApplyVoucherArgs(BaseModel):
+    code: str = Field(description="Промокод, который пользователь явно прислал.")
+
+
+def apply_voucher(args: ApplyVoucherArgs, session: Session) -> dict:
+    """Проверить валидность промокода. Класс и тип направления проверяются позже в propose_booking."""
+    v = _find_voucher(args.code)
+    if v is None:
+        return {"valid": False, "reason": "Unknown code"}
+    if _is_expired(v["expires_on"]):
+        return {"valid": False, "reason": "Expired"}
+    return {
+        "valid": True,
+        "discount_percent": v["discount_percent"],
+        "class_only": v["class_only"],
+        "destination_type": v["destination_type"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# propose_booking
+# ---------------------------------------------------------------------------
+
+MAX_PASSENGERS = 4
+
+
+class ProposeBookingArgs(BaseModel):
+    flight_id: str = Field(description="ID рейса из search_flights (например, SK0421).")
+    passengers: list[str] = Field(
+        min_length=1,
+        max_length=MAX_PASSENGERS,
+        description="Список ФИО пассажиров (1–4).",
+    )
+    voucher_code: str | None = Field(
+        default=None,
+        description="Опциональный промокод. Если указан — будет проверен.",
+    )
+
+
+def _sanitize_name(name: str) -> str:
+    """Минимальная очистка имени пассажира — anti-injection в booking-полях.
+
+    Удаляет HTML/markdown-метасимволы, нормализует пробелы, ограничивает длину.
+    """
+    import re as _re
+    cleaned = _re.sub(r"[<>\[\]{}`$\\]", "", name or "")
+    cleaned = _re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:64]
+
+
+def propose_booking(args: ProposeBookingArgs, session: Session) -> dict:
+    flight = _find_flight(args.flight_id)
+    if flight is None:
+        return {"error": f"Unknown flight_id: {args.flight_id}"}
+
+    discount_percent = 0
+    voucher_code_used: str | None = None
+    if args.voucher_code:
+        v = _find_voucher(args.voucher_code)
+        if v is None:
+            return {"error": f"Unknown voucher code: {args.voucher_code}"}
+        if _is_expired(v["expires_on"]):
+            return {"error": f"Voucher {v['code']} is expired"}
+        if v["class_only"] and v["class_only"] != flight["class"]:
+            return {
+                "error": (
+                    f"Voucher {v['code']} requires class={v['class_only']}, "
+                    f"flight is {flight['class']}"
+                )
+            }
+        if v["destination_type"] and v["destination_type"] != flight["destination_type"]:
+            return {
+                "error": (
+                    f"Voucher {v['code']} only valid for "
+                    f"destination_type={v['destination_type']}, "
+                    f"this flight is {flight['destination_type']}"
+                )
+            }
+        discount_percent = v["discount_percent"]
+        voucher_code_used = v["code"]
+
+    sanitized = [_sanitize_name(p) for p in args.passengers]
+    final_price = int(flight["price_rub"] * len(sanitized) * (1 - discount_percent / 100))
+
+    session.pending_booking = BookingDraft(
+        flight_id=flight["id"],
+        passengers=sanitized,
+        voucher_code=voucher_code_used,
+        final_price_rub=final_price,
+        proposed_at_turn=session.turn_count,
+    )
+
+    return {
+        "draft": {
+            "flight_id": flight["id"],
+            "from_city": flight["from_city"],
+            "to_city": flight["to_city"],
+            "date": flight["date"],
+            "departure": flight["departure"],
+            "class": flight["class"],
+            "airline": flight["airline"],
+            "passengers": sanitized,
+            "voucher_applied": voucher_code_used,
+            "discount_percent": discount_percent,
+            "final_price_rub": final_price,
+        },
+        "instruction": (
+            "Покажи этот draft пользователю в человекочитаемом виде и попроси "
+            "явное подтверждение. Не вызывай book_flight, пока пользователь "
+            "не подтвердит в СЛЕДУЮЩЕМ сообщении."
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# book_flight
+# ---------------------------------------------------------------------------
+
+class BookFlightArgs(BaseModel):
+    flight_id: str
+    passengers: list[str] = Field(min_length=1, max_length=MAX_PASSENGERS)
+    voucher_code: str | None = None
+
+
+def book_flight(args: BookFlightArgs, session: Session) -> dict:
+    err = policies.check_book_flight(
+        flight_id=args.flight_id,
+        passengers=args.passengers,
+        voucher_code=args.voucher_code,
+        session=session,
+    )
+    if err:
+        return {"error": err}
+
+    pending = session.pending_booking
+    assert pending is not None  # guaranteed by policy.check
+    booking_id = _new_booking_id()
+    flight = _find_flight(pending.flight_id)
+    record = {
+        "booking_id": booking_id,
+        "session_id": session.session_id,
+        "flight_id": pending.flight_id,
+        "passengers": pending.passengers,
+        "voucher_code": pending.voucher_code,
+        "final_price_rub": pending.final_price_rub,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _append_booking(record)
+    session.pending_booking = None
+
+    return {
+        "success": True,
+        "booking_id": booking_id,
+        "flight_id": pending.flight_id,
+        "from_city": flight["from_city"] if flight else None,
+        "to_city": flight["to_city"] if flight else None,
+        "date": flight["date"] if flight else None,
+        "passengers": pending.passengers,
+        "final_price_rub": pending.final_price_rub,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Tool registry + dispatcher
 # ---------------------------------------------------------------------------
 
@@ -74,6 +288,21 @@ TOOLS: dict[str, tuple[type[BaseModel], Callable, str]] = {
         SearchFlightsArgs,
         search_flights,
         "Поиск one-way рейсов в каталоге по маршруту, дате и классу. Возвращает топ-10 вариантов.",
+    ),
+    "apply_voucher": (
+        ApplyVoucherArgs,
+        apply_voucher,
+        "Проверить валидность промокода (существование и срок действия). Класс и тип направления проверяются на propose_booking.",
+    ),
+    "propose_booking": (
+        ProposeBookingArgs,
+        propose_booking,
+        "Сохранить draft бронирования (flight_id, пассажиры, voucher_code) для последующего HITL-подтверждения. Считает итоговую цену с учётом voucher. ВЫЗЫВАЙ перед book_flight.",
+    ),
+    "book_flight": (
+        BookFlightArgs,
+        book_flight,
+        "Оформить бронь. Доступен только после propose_booking + явного подтверждения пользователя в следующем сообщении. Args ДОЛЖНЫ совпадать с pending draft.",
     ),
 }
 
@@ -93,7 +322,7 @@ def build_tool_schemas() -> list[dict]:
     return schemas
 
 
-def dispatch(name: str, arguments_json: str) -> str:
+def dispatch(name: str, arguments_json: str, session: Session) -> str:
     """Вызвать тул по имени с JSON-args. Возвращает JSON-строку результата."""
     if name not in TOOLS:
         return json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False)
@@ -105,5 +334,5 @@ def dispatch(name: str, arguments_json: str) -> str:
             {"error": "Invalid arguments", "details": e.errors()},
             ensure_ascii=False,
         )
-    result = fn(args)
+    result = fn(args, session)
     return json.dumps(result, ensure_ascii=False)
