@@ -23,6 +23,7 @@ LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 
 FLIGHTS_PATH = DATA_DIR / "flights.json"
 VOUCHERS_PATH = DATA_DIR / "vouchers.json"
+SEED_BOOKINGS_PATH = DATA_DIR / "seed_bookings.json"
 WEB_MOCK_INDEX_PATH = WEB_MOCK_DIR / "index.json"
 BOOKINGS_PATH = LOGS_DIR / "bookings.jsonl"
 
@@ -80,6 +81,46 @@ def _append_booking(record: dict) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     with BOOKINGS_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def maybe_seed_bookings() -> None:
+    """Долить недостающие seed-записи в bookings.jsonl.
+
+    Поведение:
+    - если seed-файла нет — выходим;
+    - читаем существующие записи (если файл есть);
+    - дописываем только seed-записи с booking_id, которых ещё нет в файле.
+
+    Идемпотентно: повторные запуски ничего не меняют. Сохраняет тестовые
+    брони, созданные в предыдущих сессиях.
+    """
+    if not SEED_BOOKINGS_PATH.exists():
+        return
+    seeds = json.loads(SEED_BOOKINGS_PATH.read_text(encoding="utf-8"))
+    existing_ids = {r.get("booking_id") for r in _read_all_bookings()}
+    to_append = [r for r in seeds if r["booking_id"] not in existing_ids]
+    if not to_append:
+        return
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    with BOOKINGS_PATH.open("a", encoding="utf-8") as f:
+        for record in to_append:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _read_all_bookings() -> list[dict]:
+    if not BOOKINGS_PATH.exists():
+        return []
+    out: list[dict] = []
+    with BOOKINGS_PATH.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +347,7 @@ def book_flight(args: BookFlightArgs, session: Session) -> dict:
     flight = _find_flight(pending.flight_id)
     record = {
         "booking_id": booking_id,
+        "user_id": session.user_id,
         "session_id": session.session_id,
         "flight_id": pending.flight_id,
         "passengers": pending.passengers,
@@ -326,6 +368,25 @@ def book_flight(args: BookFlightArgs, session: Session) -> dict:
         "passengers": pending.passengers,
         "final_price_rub": pending.final_price_rub,
     }
+
+
+# ---------------------------------------------------------------------------
+# list_my_bookings
+# ---------------------------------------------------------------------------
+
+class ListMyBookingsArgs(BaseModel):
+    """Без аргументов — фильтрация всегда по session.user_id."""
+    pass
+
+
+def list_my_bookings(args: ListMyBookingsArgs, session: Session) -> dict:
+    """Бронирования ТОЛЬКО для current userId (X-User-Id из header). Никогда не возвращает чужие записи."""
+    user_id = session.user_id
+    matching = [
+        rec for rec in _read_all_bookings()
+        if rec.get("user_id") == user_id
+    ]
+    return {"user_id": user_id, "count": len(matching), "bookings": matching}
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +419,11 @@ TOOLS: dict[str, tuple[type[BaseModel], Callable, str]] = {
         BookFlightArgs,
         book_flight,
         "Оформить бронь. Доступен только после propose_booking + явного подтверждения пользователя в следующем сообщении. Args ДОЛЖНЫ совпадать с pending draft.",
+    ),
+    "list_my_bookings": (
+        ListMyBookingsArgs,
+        list_my_bookings,
+        "Вернуть бронирования ТОЛЬКО текущего пользователя. Тул не принимает аргументов — userId берётся ТОЛЬКО из header X-User-Id, не из текста чата.",
     ),
 }
 

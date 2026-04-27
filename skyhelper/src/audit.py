@@ -18,12 +18,14 @@ def log_turn(
     user_message: str,
     tool_calls: list[dict],
     assistant_reply: str,
+    user_id: str = "ANON",
 ) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOGS_DIR / f"{session_id}.jsonl"
     record = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "turn": turn,
+        "user_id": user_id,
         "user_message": user_message,
         "tool_calls": tool_calls,
         "assistant_reply": assistant_reply,

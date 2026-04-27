@@ -31,7 +31,7 @@ uvicorn skyhelper.src.app:app --reload --port 8000
 - [x] **Slice 3** — booking flow: apply_voucher / propose_booking / book_flight + HITL-гейт через `policies.check_book_flight`
 - [x] **Slice 4** — `fetch_url` + web_mock (3 clean + 3 poisoned) + URL allowlist через `index.json`
 - [x] **Slice 4.5** — audit-видимость: tool-calls в ChatResponse + UI-рендер + per-session jsonl лог
-- [ ] Slice 5 — `list_my_bookings` + multi-user (X-User-Id, seed)
+- [x] **Slice 5** — multi-user threat model: `X-User-Id` header, seed CRM (10 юзеров, 15 броней), `list_my_bookings` с tenancy-фильтром
 - [ ] Slice 6 — output guard + canary
 - [ ] Slice 7 — Bearer auth + rate limit
 - [ ] Slice 8 — Cloudflared tunnel + partner_brief.md

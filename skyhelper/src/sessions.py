@@ -1,4 +1,4 @@
-"""In-memory session storage. Slice 3: добавлены pending_booking и turn_count."""
+"""In-memory session storage. Slice 5: добавлен user_id для multi-user threat model."""
 from __future__ import annotations
 
 import uuid
@@ -18,6 +18,7 @@ class BookingDraft:
 @dataclass
 class Session:
     session_id: str
+    user_id: str = "ANON"
     history: list[dict] = field(default_factory=list)
     pending_booking: BookingDraft | None = None
     turn_count: int = 0
@@ -26,10 +27,13 @@ class Session:
 _sessions: dict[str, Session] = {}
 
 
-def get_or_create(session_id: str | None) -> Session:
+def get_or_create(session_id: str | None, user_id: str = "ANON") -> Session:
     if session_id and session_id in _sessions:
-        return _sessions[session_id]
+        sess = _sessions[session_id]
+        # user_id обновляется на каждый запрос — header это source of truth.
+        sess.user_id = user_id
+        return sess
     new_id = session_id or str(uuid.uuid4())
-    session = Session(session_id=new_id)
+    session = Session(session_id=new_id, user_id=user_id)
     _sessions[new_id] = session
     return session

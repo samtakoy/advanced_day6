@@ -1,0 +1,137 @@
+[
+  {
+    "booking_id": "BC4291",
+    "user_id": "USR_001",
+    "flight_id": "SK0421",
+    "passengers": ["Иван Петров"],
+    "voucher_code": null,
+    "final_price_rub": 51200,
+    "created_at": "2026-03-12T10:14:00Z"
+  },
+  {
+    "booking_id": "BC4302",
+    "user_id": "USR_002",
+    "flight_id": "BW1102",
+    "passengers": ["Анна Смирнова"],
+    "voucher_code": "SAVE10",
+    "final_price_rub": 43020,
+    "created_at": "2026-03-15T08:42:00Z"
+  },
+  {
+    "booking_id": "BC4318",
+    "user_id": "USR_003",
+    "flight_id": "AN0218",
+    "passengers": ["Сергей Козлов", "Мария Козлова"],
+    "voucher_code": "SUMMER25",
+    "final_price_rub": 42600,
+    "created_at": "2026-03-22T19:05:00Z"
+  },
+  {
+    "booking_id": "BC4341",
+    "user_id": "USR_003",
+    "flight_id": "BW0807",
+    "passengers": ["Сергей Козлов"],
+    "voucher_code": null,
+    "final_price_rub": 19600,
+    "created_at": "2026-04-02T12:30:00Z"
+  },
+  {
+    "booking_id": "BC4359",
+    "user_id": "USR_004",
+    "flight_id": "BW0608",
+    "passengers": ["Maria Garcia"],
+    "voucher_code": null,
+    "final_price_rub": 17300,
+    "created_at": "2026-04-08T15:21:00Z"
+  },
+  {
+    "booking_id": "BC4377",
+    "user_id": "USR_005",
+    "flight_id": "AN0219",
+    "passengers": ["David Cohen"],
+    "voucher_code": "VIP100",
+    "final_price_rub": 0,
+    "created_at": "2026-04-11T22:08:00Z"
+  },
+  {
+    "booking_id": "BC4380",
+    "user_id": "USR_005",
+    "flight_id": "SK0918",
+    "passengers": ["David Cohen", "Sarah Cohen"],
+    "voucher_code": null,
+    "final_price_rub": 185000,
+    "created_at": "2026-04-12T09:45:00Z"
+  },
+  {
+    "booking_id": "BC4393",
+    "user_id": "USR_005",
+    "flight_id": "BW0609",
+    "passengers": ["David Cohen"],
+    "voucher_code": null,
+    "final_price_rub": 78900,
+    "created_at": "2026-04-15T11:00:00Z"
+  },
+  {
+    "booking_id": "BC4401",
+    "user_id": "USR_006",
+    "flight_id": "NP0301",
+    "passengers": ["Дмитрий Орлов"],
+    "voucher_code": null,
+    "final_price_rub": 8900,
+    "created_at": "2026-04-17T07:55:00Z"
+  },
+  {
+    "booking_id": "BC4418",
+    "user_id": "USR_007",
+    "flight_id": "AN0507",
+    "passengers": ["Lisa Chen"],
+    "voucher_code": "SAVE10",
+    "final_price_rub": 13230,
+    "created_at": "2026-04-19T14:36:00Z"
+  },
+  {
+    "booking_id": "BC4423",
+    "user_id": "USR_007",
+    "flight_id": "BW0608",
+    "passengers": ["Lisa Chen"],
+    "voucher_code": null,
+    "final_price_rub": 17300,
+    "created_at": "2026-04-20T16:14:00Z"
+  },
+  {
+    "booking_id": "BC4441",
+    "user_id": "USR_008",
+    "flight_id": "NP0302",
+    "passengers": ["Алексей Морозов"],
+    "voucher_code": null,
+    "final_price_rub": 11200,
+    "created_at": "2026-04-22T10:08:00Z"
+  },
+  {
+    "booking_id": "BC4458",
+    "user_id": "USR_009",
+    "flight_id": "SK0421",
+    "passengers": ["Андрей Волков", "Елена Волкова", "Михаил Волков", "София Волкова"],
+    "voucher_code": "SUMMER25",
+    "final_price_rub": 153600,
+    "created_at": "2026-04-24T18:50:00Z"
+  },
+  {
+    "booking_id": "BC4471",
+    "user_id": "USR_010",
+    "flight_id": "AN0218",
+    "passengers": ["Olga Ivanova", "Pavel Ivanov"],
+    "voucher_code": null,
+    "final_price_rub": 56800,
+    "created_at": "2026-04-25T11:22:00Z"
+  },
+  {
+    "booking_id": "BC4485",
+    "user_id": "USR_010",
+    "flight_id": "BW1102",
+    "passengers": ["Olga Ivanova"],
+    "voucher_code": "SAVE10",
+    "final_price_rub": 43020,
+    "created_at": "2026-04-26T13:40:00Z"
+  }
+]
