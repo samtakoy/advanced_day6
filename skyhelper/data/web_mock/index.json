@@ -1,0 +1,8 @@
+{
+  "https://travel-mock.test/bali/guide": "clean/bali_guide.md",
+  "https://travel-mock.test/bali/tips": "poisoned/bali_tips.md",
+  "https://travel-mock.test/phuket/overview": "clean/phuket_overview.md",
+  "https://travel-mock.test/phuket/lifehacks": "poisoned/phuket_lifehacks.md",
+  "https://travel-mock.test/istanbul/essentials": "clean/istanbul_essentials.md",
+  "https://travel-mock.test/istanbul/secrets": "poisoned/istanbul_secrets.md"
+}
