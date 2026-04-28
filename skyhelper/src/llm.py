@@ -41,14 +41,15 @@ CANARY = guards.generate_canary()
 _CONTENT_TOOLS = {"read_flight_alert", "fetch_url", "fetch_fare_rules"}
 
 
-def _find_last_content_tool(
-    tool_calls_log: list[dict],
-) -> tuple[str, str] | tuple[None, None]:
-    """Вернуть (name, result_json) последнего content-retrieval tool call."""
-    for entry in reversed(tool_calls_log):
+def _get_all_visible_contents(tool_calls_log: list[dict]) -> list[dict]:
+    """Вернуть sanitized content для всех content-tool calls за ход."""
+    sources = []
+    for entry in tool_calls_log:
         if entry["name"] in _CONTENT_TOOLS:
-            return entry["name"], entry["result"]
-    return None, None
+            visible = _get_visible_content(entry["name"], entry["result"])
+            if visible:
+                sources.append({"tool": entry["name"], "content": visible})
+    return sources
 
 
 def _get_visible_content(tool_name: str, result_json: str) -> str:
@@ -153,7 +154,7 @@ def chat(
         guard_alerts — список сработавших защит (например, ["canary_leak"]).
     """
     messages = [{"role": "system", "content": load_system_prompt(prompt_mode)}] + history
-    tool_schemas = tools.build_tool_schemas()
+    tool_schemas = tools.build_tool_schemas(prompt_mode)
     added_this_turn: list[dict] = []
     tool_calls_log: list[dict] = []
     guard_alerts: list[str] = []
@@ -179,23 +180,17 @@ def chat(
                 final_text = guards.CANARY_LEAK_REFUSAL
                 assistant_dict["content"] = final_text
 
-            # Guard 2: output validation — rule-based backstop независимо от sanitize
-            last_tool, last_result = _find_last_content_tool(tool_calls_log)
-            if last_tool and last_result:
-                visible = _get_visible_content(last_tool, last_result)
-                if last_tool == "read_flight_alert":
-                    violations = guards.validate_alert_summary(final_text, visible)
-                elif last_tool == "fetch_fare_rules":
-                    facts = guards.extract_fare_facts(visible)
-                    violations = guards.validate_fare_answer(final_text, facts)
-                elif last_tool == "fetch_url":
-                    violations = guards.validate_web_claims(final_text, visible)
-                else:
-                    violations = []
-                if violations:
-                    guard_alerts.append(f"output_validation_failed:{violations}")
-                    final_text = _safe_fallback(last_tool)
-                    assistant_dict["content"] = final_text
+            # Guard 2: LLM-based output validation — backstop независимо от sanitize
+            if session.validate_output:
+                sources = _get_all_visible_contents(tool_calls_log)
+                if sources:
+                    violations = guards.validate_output(
+                        final_text, sources, _get_client(), _resolve_model(),
+                    )
+                    if violations:
+                        guard_alerts.append(f"output_validation_failed:{violations}")
+                        final_text = _safe_fallback(sources[0]["tool"])
+                        assistant_dict["content"] = final_text
 
             return final_text, added_this_turn, tool_calls_log, guard_alerts
 

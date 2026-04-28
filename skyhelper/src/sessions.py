@@ -23,6 +23,8 @@ class Session:
     pending_booking: BookingDraft | None = None
     turn_count: int = 0
     sanitize: bool = True
+    validate_output: bool = True
+    prompt_mode: str = "hardened"
 
 
 _sessions: dict[str, Session] = {}

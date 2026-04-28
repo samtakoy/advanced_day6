@@ -36,6 +36,16 @@ def _last_user_message(session: Session) -> str:
     return ""
 
 
+def _recent_user_text(session: Session, last_n: int = 3) -> str:
+    """Конкатенация последних N user-сообщений для intent-checks."""
+    msgs = [
+        msg.get("content", "") or ""
+        for msg in session.history
+        if msg.get("role") == "user"
+    ]
+    return " ".join(msgs[-last_n:])
+
+
 def _normalize_passenger(name: str) -> str:
     """Для сравнения args c pending — игнорируем регистр и пробелы."""
     return " ".join((name or "").lower().split())
@@ -102,4 +112,45 @@ def check_book_flight(
             "Show the draft and wait for explicit yes/да/подтверждаю/ok."
         )
 
+    return None
+
+
+_LIST_BOOKINGS_RE = re.compile(
+    r"мои.{0,10}брон|список.{0,10}брон|покажи.{0,10}брон|"
+    r"my.{0,5}booking|list.{0,5}booking|show.{0,5}booking|"
+    r"мои рейс|мои билет",
+    re.IGNORECASE,
+)
+
+
+def check_list_my_bookings(session: Session) -> str | None:
+    """Разрешить list_my_bookings только если пользователь явно запросил свои брони."""
+    text = _recent_user_text(session)
+    if not _LIST_BOOKINGS_RE.search(text):
+        return (
+            "User did not explicitly ask about their bookings. "
+            "Only call list_my_bookings when the user explicitly requests to see their bookings."
+        )
+    return None
+
+
+def check_apply_voucher(code: str, session: Session) -> str | None:
+    """Разрешить apply_voucher только если пользователь явно назвал код."""
+    text = _recent_user_text(session)
+    if not code or code.upper() not in text.upper():
+        return (
+            f"Voucher code '{code}' was not explicitly mentioned by the user. "
+            "Only call apply_voucher when the user explicitly provides a code in their message."
+        )
+    return None
+
+
+def check_fetch_url(url: str, session: Session) -> str | None:
+    """Разрешить fetch_url только если пользователь явно прислал этот URL."""
+    text = _recent_user_text(session)
+    if not url or url not in text:
+        return (
+            f"URL '{url}' was not explicitly sent by the user in recent messages. "
+            "Only call fetch_url when the user explicitly provides a URL."
+        )
     return None
