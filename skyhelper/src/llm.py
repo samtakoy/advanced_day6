@@ -154,7 +154,7 @@ def chat(
         guard_alerts — список сработавших защит (например, ["canary_leak"]).
     """
     messages = [{"role": "system", "content": load_system_prompt(prompt_mode)}] + history
-    tool_schemas = tools.build_tool_schemas()
+    tool_schemas = tools.build_tool_schemas(prompt_mode)
     added_this_turn: list[dict] = []
     tool_calls_log: list[dict] = []
     guard_alerts: list[str] = []

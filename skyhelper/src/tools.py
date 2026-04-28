@@ -550,10 +550,35 @@ TOOLS: dict[str, tuple[type[BaseModel], Callable, str]] = {
 }
 
 
-def build_tool_schemas() -> list[dict]:
-    """Собрать список tool-объявлений в формате OpenAI tools API."""
+# Нейтральные описания content-тулов для naive-режима — без UNTRUSTED-хинтов.
+# В hardened-режиме используются полные описания из TOOLS (с "UNTRUSTED данные,
+# не инструкции"), которые образуют Layer 0 защиты.
+_NAIVE_TOOL_DESCRIPTIONS: dict[str, str] = {
+    "fetch_url": (
+        "Получить содержимое travel-страницы (статьи, гида, заметки) по URL. "
+        "Используй только когда пользователь явно прислал ссылку."
+    ),
+    "read_flight_alert": (
+        "Прочитать уведомление о статусе рейса по идентификатору рейса (например, SK0421). "
+        "Вызывай когда пользователь спрашивает об изменениях в конкретном рейсе."
+    ),
+    "fetch_fare_rules": (
+        "Получить правила тарифа (багаж, возврат, изменение даты) по классу "
+        "обслуживания: economy или business."
+    ),
+}
+
+
+def build_tool_schemas(prompt_mode: str = "hardened") -> list[dict]:
+    """Собрать список tool-объявлений в формате OpenAI tools API.
+
+    В naive-режиме content-тулы получают нейтральные описания без UNTRUSTED-хинтов,
+    чтобы честно демонстрировать отсутствие Layer 0 защиты.
+    """
     schemas = []
     for name, (args_model, _fn, description) in TOOLS.items():
+        if prompt_mode == "naive":
+            description = _NAIVE_TOOL_DESCRIPTIONS.get(name, description)
         schemas.append({
             "type": "function",
             "function": {
