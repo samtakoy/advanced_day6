@@ -90,16 +90,21 @@
     <label><input type="radio" name="prompt_mode" value="naive"> Обычный</label>
     <label><input type="radio" name="prompt_mode" value="hardened" checked> Усиленный</label>
   </div>
-  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+  <div class="meta" style="margin-bottom:0.4em;display:flex;gap:0.8em;align-items:center">
     <span>Санитизация:</span>
     <label><input type="radio" name="sanitize" value="on" checked> Вкл</label>
     <label><input type="radio" name="sanitize" value="off"> Выкл</label>
+  </div>
+  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+    <span>Валидация ответа:</span>
+    <label><input type="radio" name="validate_output" value="on" checked> Вкл</label>
+    <label><input type="radio" name="validate_output" value="off"> Выкл</label>
   </div>
   <div id="history"></div>
   <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
   <div>
     <button id="send">Отправить</button>
-    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code> · sanitize: <code id="slabel">on</code></span>
+    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code> · sanitize: <code id="slabel">on</code> · validate: <code id="vlabel">on</code></span>
   </div>
   <script>
     let sessionId = null;
@@ -115,6 +120,8 @@
     const resetBtn = document.getElementById('reset');
     const promptModeRadios = document.querySelectorAll('input[name="prompt_mode"]');
     const sanitizeRadios = document.querySelectorAll('input[name="sanitize"]');
+    const validateRadios = document.querySelectorAll('input[name="validate_output"]');
+    const vlabel = document.getElementById('vlabel');
 
     bearerInput.value = localStorage.getItem('bearer') || '';
     bearerInput.addEventListener('input', () => {
@@ -144,6 +151,23 @@
       });
     }
     slabel.textContent = savedSanitize;
+
+    const savedValidate = localStorage.getItem('validate_output') || 'on';
+    for (const r of validateRadios) {
+      r.checked = (r.value === savedValidate);
+      r.addEventListener('change', () => {
+        if (r.checked) {
+          localStorage.setItem('validate_output', r.value);
+          vlabel.textContent = r.value;
+        }
+      });
+    }
+    vlabel.textContent = savedValidate;
+
+    function currentValidateOutput() {
+      for (const r of validateRadios) if (r.checked) return r.value !== 'off';
+      return true;
+    }
 
     function currentPromptMode() {
       for (const r of promptModeRadios) if (r.checked) return r.value;
@@ -244,6 +268,7 @@
             message: msg,
             prompt_mode: currentPromptMode(),
             sanitize: currentSanitize(),
+            validate_output: currentValidateOutput(),
           }),
         });
         if (!r.ok) {

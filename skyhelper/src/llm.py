@@ -180,16 +180,17 @@ def chat(
                 assistant_dict["content"] = final_text
 
             # Guard 2: LLM-based output validation — backstop независимо от sanitize
-            last_tool, last_result = _find_last_content_tool(tool_calls_log)
-            if last_tool and last_result:
-                visible = _get_visible_content(last_tool, last_result)
-                violations = guards.validate_output(
-                    final_text, visible, _get_client(), _resolve_model(),
-                )
-                if violations:
-                    guard_alerts.append(f"output_validation_failed:{violations}")
-                    final_text = _safe_fallback(last_tool)
-                    assistant_dict["content"] = final_text
+            if session.validate_output:
+                last_tool, last_result = _find_last_content_tool(tool_calls_log)
+                if last_tool and last_result:
+                    visible = _get_visible_content(last_tool, last_result)
+                    violations = guards.validate_output(
+                        final_text, visible, _get_client(), _resolve_model(),
+                    )
+                    if violations:
+                        guard_alerts.append(f"output_validation_failed:{violations}")
+                        final_text = _safe_fallback(last_tool)
+                        assistant_dict["content"] = final_text
 
             return final_text, added_this_turn, tool_calls_log, guard_alerts
 
