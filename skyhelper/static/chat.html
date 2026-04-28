@@ -85,16 +85,21 @@
     <label>X-User-Id: <input id="userid" value="DEMO_USER" style="font-family:ui-monospace;width:140px;padding:2px 6px"></label>
     <button id="reset" type="button" style="padding:2px 10px;background:#888;font-size:0.85em">Новая сессия</button>
   </div>
-  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+  <div class="meta" style="margin-bottom:0.4em;display:flex;gap:0.8em;align-items:center">
     <span>Промпт:</span>
     <label><input type="radio" name="prompt_mode" value="naive"> Обычный</label>
     <label><input type="radio" name="prompt_mode" value="hardened" checked> Усиленный</label>
+  </div>
+  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+    <span>Санитизация:</span>
+    <label><input type="radio" name="sanitize" value="on" checked> Вкл</label>
+    <label><input type="radio" name="sanitize" value="off"> Выкл</label>
   </div>
   <div id="history"></div>
   <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
   <div>
     <button id="send">Отправить</button>
-    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code></span>
+    <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code> · sanitize: <code id="slabel">on</code></span>
   </div>
   <script>
     let sessionId = null;
@@ -104,10 +109,12 @@
     const sidLabel = document.getElementById('sid');
     const uidLabel = document.getElementById('uid');
     const pmodeLabel = document.getElementById('pmode');
+    const slabel = document.getElementById('slabel');
     const userIdInput = document.getElementById('userid');
     const bearerInput = document.getElementById('bearer');
     const resetBtn = document.getElementById('reset');
     const promptModeRadios = document.querySelectorAll('input[name="prompt_mode"]');
+    const sanitizeRadios = document.querySelectorAll('input[name="sanitize"]');
 
     bearerInput.value = localStorage.getItem('bearer') || '';
     bearerInput.addEventListener('input', () => {
@@ -126,9 +133,26 @@
     }
     pmodeLabel.textContent = savedMode;
 
+    const savedSanitize = localStorage.getItem('sanitize') || 'on';
+    for (const r of sanitizeRadios) {
+      r.checked = (r.value === savedSanitize);
+      r.addEventListener('change', () => {
+        if (r.checked) {
+          localStorage.setItem('sanitize', r.value);
+          slabel.textContent = r.value;
+        }
+      });
+    }
+    slabel.textContent = savedSanitize;
+
     function currentPromptMode() {
       for (const r of promptModeRadios) if (r.checked) return r.value;
       return 'hardened';
+    }
+
+    function currentSanitize() {
+      for (const r of sanitizeRadios) if (r.checked) return r.value !== 'off';
+      return true;
     }
 
     function refreshUidLabelFromInput() {
@@ -219,6 +243,7 @@
             session_id: sessionId,
             message: msg,
             prompt_mode: currentPromptMode(),
+            sanitize: currentSanitize(),
           }),
         });
         if (!r.ok) {

@@ -189,7 +189,7 @@ def fetch_url(args: FetchUrlArgs, session: Session) -> dict:
         raw_content = file_path.read_text(encoding="utf-8")
     except Exception as e:  # noqa: BLE001
         return {"error": f"Failed to read content: {e}"}
-    sanitized = guards.strip_hidden_html(raw_content)
+    sanitized = guards.strip_hidden_html(raw_content) if session.sanitize else raw_content
     return {
         "url": url,
         "trust_level": "untrusted",

@@ -83,6 +83,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str
     prompt_mode: Literal["naive", "hardened"] = "hardened"
+    sanitize: bool = True
 
 
 class ToolCallRecord(BaseModel):
@@ -117,6 +118,7 @@ async def chat(
 ) -> ChatResponse:
     user_id = x_user_id or "ANON"
     session = sessions.get_or_create(request.session_id, user_id=user_id)
+    session.sanitize = request.sanitize
     session.turn_count += 1
     policies.check_pending_timeout(session)
     session.history.append({"role": "user", "content": request.message})

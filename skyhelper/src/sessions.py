@@ -22,6 +22,7 @@ class Session:
     history: list[dict] = field(default_factory=list)
     pending_booking: BookingDraft | None = None
     turn_count: int = 0
+    sanitize: bool = True
 
 
 _sessions: dict[str, Session] = {}
