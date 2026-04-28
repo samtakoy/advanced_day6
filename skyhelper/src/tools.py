@@ -195,6 +195,9 @@ class FetchUrlArgs(BaseModel):
 
 def fetch_url(args: FetchUrlArgs, session: Session) -> dict:
     """Прочитать travel-страницу из mock-каталога и вернуть её содержимое как UNTRUSTED данные."""
+    err = policies.check_fetch_url(args.url, session)
+    if err:
+        return {"error": err}
     index = _load_url_index()
     url = (args.url or "").strip()
     if url not in index:
@@ -316,6 +319,9 @@ class ApplyVoucherArgs(BaseModel):
 
 def apply_voucher(args: ApplyVoucherArgs, session: Session) -> dict:
     """Проверить валидность промокода. Класс и тип направления проверяются позже в propose_booking."""
+    err = policies.check_apply_voucher(args.code, session)
+    if err:
+        return {"error": err}
     v = _find_voucher(args.code)
     if v is None:
         return {"valid": False, "reason": "Unknown code"}
@@ -484,6 +490,9 @@ class ListMyBookingsArgs(BaseModel):
 
 def list_my_bookings(args: ListMyBookingsArgs, session: Session) -> dict:
     """Бронирования ТОЛЬКО для current userId (X-User-Id из header). Никогда не возвращает чужие записи."""
+    err = policies.check_list_my_bookings(session)
+    if err:
+        return {"error": err}
     user_id = session.user_id
     matching = [
         rec for rec in _read_all_bookings()

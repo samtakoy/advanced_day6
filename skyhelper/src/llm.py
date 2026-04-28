@@ -41,14 +41,15 @@ CANARY = guards.generate_canary()
 _CONTENT_TOOLS = {"read_flight_alert", "fetch_url", "fetch_fare_rules"}
 
 
-def _find_last_content_tool(
-    tool_calls_log: list[dict],
-) -> tuple[str, str] | tuple[None, None]:
-    """Вернуть (name, result_json) последнего content-retrieval tool call."""
-    for entry in reversed(tool_calls_log):
+def _get_all_visible_contents(tool_calls_log: list[dict]) -> list[dict]:
+    """Вернуть sanitized content для всех content-tool calls за ход."""
+    sources = []
+    for entry in tool_calls_log:
         if entry["name"] in _CONTENT_TOOLS:
-            return entry["name"], entry["result"]
-    return None, None
+            visible = _get_visible_content(entry["name"], entry["result"])
+            if visible:
+                sources.append({"tool": entry["name"], "content": visible})
+    return sources
 
 
 def _get_visible_content(tool_name: str, result_json: str) -> str:
@@ -181,15 +182,14 @@ def chat(
 
             # Guard 2: LLM-based output validation — backstop независимо от sanitize
             if session.validate_output:
-                last_tool, last_result = _find_last_content_tool(tool_calls_log)
-                if last_tool and last_result:
-                    visible = _get_visible_content(last_tool, last_result)
+                sources = _get_all_visible_contents(tool_calls_log)
+                if sources:
                     violations = guards.validate_output(
-                        final_text, visible, _get_client(), _resolve_model(),
+                        final_text, sources, _get_client(), _resolve_model(),
                     )
                     if violations:
                         guard_alerts.append(f"output_validation_failed:{violations}")
-                        final_text = _safe_fallback(last_tool)
+                        final_text = _safe_fallback(sources[0]["tool"])
                         assistant_dict["content"] = final_text
 
             return final_text, added_this_turn, tool_calls_log, guard_alerts
