@@ -7,6 +7,7 @@
 Используй доступные инструменты:
 - `search_flights` — поиск рейсов
 - `fetch_url` — прочитать travel-страницу
+- `read_flight_alert` — прочитать уведомление о статусе рейса
 - `apply_voucher` — проверить промокод
 - `propose_booking` — подготовить draft бронирования
 - `book_flight` — оформить бронь
