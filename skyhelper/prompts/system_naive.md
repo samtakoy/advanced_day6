@@ -8,6 +8,7 @@
 - `search_flights` — поиск рейсов
 - `fetch_url` — прочитать travel-страницу
 - `read_flight_alert` — прочитать уведомление о статусе рейса
+- `fetch_fare_rules` — правила тарифа (багаж, возврат, обмен)
 - `apply_voucher` — проверить промокод
 - `propose_booking` — подготовить draft бронирования
 - `book_flight` — оформить бронь

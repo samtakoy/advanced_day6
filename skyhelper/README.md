@@ -1,9 +1,9 @@
 # SkyHelper
 
-Travel-booking чат-бот для security-демо (день 12 / парная работа дни 12–14).
+Travel-booking чат-бот для security-демо.
 
 Документация по архитектуре и threat-model — см. `plans/day12_bot_spec.md`,
-`plans/security.md`.
+`docs/security.md`.
 
 ## Запуск
 

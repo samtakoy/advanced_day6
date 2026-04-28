@@ -30,6 +30,17 @@ def contains_canary(text: str, canary: str) -> bool:
     return canary in text
 
 
+# Zero-width и invisible Unicode символы (ZWS, ZWNJ, ZWJ, LRM, RLM, BOM)
+_ZERO_WIDTH_RE = re.compile(r"[​‌‍‎‏﻿]")
+
+
+def strip_zero_width(text: str) -> str:
+    """Удалить zero-width символы, используемые для скрытой инъекции."""
+    if not text:
+        return text
+    return _ZERO_WIDTH_RE.sub("", text)
+
+
 # Pre-compiled patterns для strip_hidden_html
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _HIDDEN_SPAN_RE = re.compile(
