@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from gateway.src import audit, input_guard, output_guard, proxy
+from gateway.src import audit, input_guard, output_guard, proxy, rate_limiter
 
 app = FastAPI(title="LLM Gateway", version="0.4.0")
 
@@ -33,9 +33,27 @@ async def healthz() -> dict:
 @app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest,
-    req: Request = None,
+    req: Request,
     x_gateway_mode: str = Header(default="mask", alias="X-Gateway-Mode"),
 ):
+    client_ip = req.client.host if req.client else "unknown"
+
+    # --- Rate Limiter ---
+    if not rate_limiter.limiter.check(client_ip):
+        return JSONResponse(
+            {
+                "error": {
+                    "message": (
+                        f"Rate limit exceeded: max {rate_limiter.RATE_LIMIT} "
+                        f"requests per {rate_limiter.RATE_WINDOW}s"
+                    ),
+                    "type": "rate_limit_exceeded",
+                }
+            },
+            status_code=429,
+            headers={"Retry-After": str(rate_limiter.RATE_WINDOW)},
+        )
+
     messages = [m.model_dump() for m in request.messages]
     mode = x_gateway_mode.lower()
 
@@ -117,7 +135,6 @@ async def chat_completions(
             if v is not None
         }
 
-    client_ip = req.client.host if req and req.client else "unknown"
     audit.log_request(
         client_ip=client_ip,
         model=request.model,
