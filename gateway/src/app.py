@@ -4,11 +4,11 @@
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from gateway.src import input_guard, output_guard, proxy
+from gateway.src import audit, input_guard, output_guard, proxy
 
 app = FastAPI(title="LLM Gateway", version="0.4.0")
 
@@ -33,6 +33,7 @@ async def healthz() -> dict:
 @app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest,
+    req: Request = None,
     x_gateway_mode: str = Header(default="mask", alias="X-Gateway-Mode"),
 ):
     messages = [m.model_dump() for m in request.messages]
@@ -107,5 +108,32 @@ async def chat_completions(
         headers["X-Gateway-Input-Secrets"] = str(len(all_input_findings))
     if output_alerts:
         headers["X-Gateway-Output-Alerts"] = ",".join(output_alerts)
+
+    # --- Audit Log ---
+    usage_dict = None
+    if response.usage:
+        usage_dict = {
+            k: v for k, v in response.usage.model_dump().items()
+            if v is not None
+        }
+
+    client_ip = req.client.host if req and req.client else "unknown"
+    audit.log_request(
+        client_ip=client_ip,
+        model=request.model,
+        input_guard_result={
+            "mode": mode,
+            "secrets_found": list({f["type"] for f in all_input_findings}),
+            "count": len(all_input_findings),
+            "action": "masked" if mode == "mask" else ("blocked" if all_input_findings else "passed"),
+        },
+        output_guard_result={
+            "alerts": output_alerts,
+            "secrets_masked": len(output_result["secrets"]),
+        },
+        usage=usage_dict,
+        messages=messages,
+        response_text=reply_text,
+    )
 
     return JSONResponse(response_dict, headers=headers)
