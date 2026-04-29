@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from gateway.src import audit, input_guard, output_guard, proxy, rate_limiter
+from gateway.src import audit, cost_tracker, input_guard, output_guard, proxy, rate_limiter
 
 app = FastAPI(title="LLM Gateway", version="0.4.0")
 
@@ -28,6 +28,11 @@ class ChatCompletionRequest(BaseModel):
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/stats")
+async def stats() -> dict:
+    return cost_tracker.get_stats()
 
 
 @app.post("/v1/chat/completions")
@@ -127,13 +132,19 @@ async def chat_completions(
     if output_alerts:
         headers["X-Gateway-Output-Alerts"] = ",".join(output_alerts)
 
-    # --- Audit Log ---
+    # --- Cost Tracker ---
+    cost_usd, cost_source = cost_tracker.extract_cost(response)
+    headers["X-Gateway-Cost-USD"] = str(cost_usd)
+
     usage_dict = None
     if response.usage:
         usage_dict = {
             k: v for k, v in response.usage.model_dump().items()
             if v is not None
         }
+    cost_tracker.record(request.model, usage_dict, cost_usd)
+
+    # --- Audit Log ---
 
     audit.log_request(
         client_ip=client_ip,
@@ -148,7 +159,7 @@ async def chat_completions(
             "alerts": output_alerts,
             "secrets_masked": len(output_result["secrets"]),
         },
-        usage=usage_dict,
+        usage={**(usage_dict or {}), "cost_usd": cost_usd, "cost_source": cost_source},
         messages=messages,
         response_text=reply_text,
     )
