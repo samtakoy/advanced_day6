@@ -34,7 +34,9 @@ _LEAK_PATTERNS: list[re.Pattern] = [
 
 _SUSPICIOUS_URL_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("javascript_url",    re.compile(r"javascript\s*:", re.IGNORECASE)),
-    ("data_url",          re.compile(r"data\s*:", re.IGNORECASE)),
+    # data: только как MIME data URL (data:image/, data:text/, data:application/)
+    # чтобы не срабатывать на "data: [...]" или "the data: field"
+    ("data_url",          re.compile(r"\bdata:[a-zA-Z]+/", re.IGNORECASE)),
     ("file_url",          re.compile(r"file://", re.IGNORECASE)),
     ("ip_url",            re.compile(r"https?://\d{1,3}(?:\.\d{1,3}){3}")),
 ]
@@ -48,8 +50,12 @@ _SUSPICIOUS_CMD_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("wget_pipe_sh",       re.compile(r"wget\b.+\|\s*(?:bash|sh)\b", re.IGNORECASE)),
     ("rm_rf_root",         re.compile(r"rm\s+-rf\s+/", re.IGNORECASE)),
     ("chmod_777",          re.compile(r"chmod\s+777", re.IGNORECASE)),
-    ("eval_exec",          re.compile(r"\b(?:eval|exec)\s*\(", re.IGNORECASE)),
-    ("os_system",          re.compile(r"\bos\.system\s*\(", re.IGNORECASE)),
+    # shell eval только с подстановкой команды $(...) — безопасно не матчить
+    # "eval() в Python" или "как работает eval"
+    ("shell_eval",         re.compile(r"\beval\s*\$\(", re.IGNORECASE)),
+    # exec только как вызов os-модуля — exec(user_input) из кода слишком
+    # часто встречается в образовательном тексте
+    ("os_exec",            re.compile(r"\bos\.(?:system|popen|exec[lve]*)\s*\(", re.IGNORECASE)),
     ("sql_drop",           re.compile(r"\bDROP\s+TABLE\b", re.IGNORECASE)),
     ("sql_delete",         re.compile(r"\bDELETE\s+FROM\b", re.IGNORECASE)),
     ("sql_comment_inject", re.compile(r";\s*--")),
@@ -64,8 +70,7 @@ def scan_secrets(text: str) -> list[dict]:
     """Найти секреты в тексте ответа модели (те же паттерны что input_guard)."""
     if not text:
         return []
-    findings: list[dict] = []
-    from gateway.src.input_guard import scan, _luhn_check  # noqa: PLC0415
+    from gateway.src.input_guard import scan  # noqa: PLC0415
     return scan(text)
 
 

@@ -99,6 +99,10 @@ def _resolve_model() -> str:
 
 
 _client: OpenAI | None = None
+_gateway_client: OpenAI | None = None
+
+# URL gateway-прокси. Если не задан — localhost:8001.
+GATEWAY_URL = os.getenv("SKYHELPER_GATEWAY_URL", "http://localhost:8001")
 
 
 def _get_client() -> OpenAI:
@@ -112,6 +116,21 @@ def _get_client() -> OpenAI:
         else:
             _client = OpenAI()  # читает OPENAI_API_KEY
     return _client
+
+
+def _get_gateway_client() -> OpenAI:
+    """Клиент, направленный в LLM Gateway.
+
+    Gateway авторизуется перед upstream сам (через свой ключ в env).
+    Ключ здесь нужен только чтобы SDK не падал с ошибкой валидации.
+    """
+    global _gateway_client
+    if _gateway_client is None:
+        _gateway_client = OpenAI(
+            api_key="gateway-passthrough",
+            base_url=f"{GATEWAY_URL}/v1",
+        )
+    return _gateway_client
 
 
 def load_system_prompt(mode: str = DEFAULT_PROMPT_MODE) -> str:
@@ -146,6 +165,7 @@ def chat(
     history: list[dict],
     session: Session,
     prompt_mode: str = DEFAULT_PROMPT_MODE,
+    use_gateway: bool = False,
 ) -> tuple[str, list[dict], list[dict], list[str]]:
     """Отправить историю в LLM, выполнить все tool-calls, вернуть финальный ответ.
 
@@ -159,8 +179,12 @@ def chat(
     tool_calls_log: list[dict] = []
     guard_alerts: list[str] = []
 
+    # Выбираем клиент: gateway-прокси или прямой upstream.
+    # Gateway авторизуется перед upstream самостоятельно.
+    client = _get_gateway_client() if use_gateway else _get_client()
+
     for _ in range(MAX_TOOL_LOOP_ITERATIONS):
-        response = _get_client().chat.completions.create(
+        response = client.chat.completions.create(
             model=_resolve_model(),
             messages=messages,
             tools=tool_schemas,

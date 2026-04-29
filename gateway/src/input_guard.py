@@ -46,16 +46,20 @@ PATTERNS: list[tuple[str, re.Pattern, str]] = [
         re.compile(r"\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})\b"),
         "[REDACTED_CARD]",
     ),
-    # Телефон РФ
+    # Телефон РФ.
+    # (?<!\w) — не матчить 8 или +7 после любого word-символа (цифры, буквы, _).
+    # (?!\d)  — не матчить если после номера ещё идут цифры (часть более длинного числа).
     (
         "PHONE_RU",
-        re.compile(r"(?:\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}"),
+        re.compile(r"(?<!\w)(?:\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)"),
         "[REDACTED_PHONE]",
     ),
-    # Международный телефон (7+ цифр с +)
+    # Международный телефон (7+ цифр с +).
+    # (?<!\w) — не матчить + внутри слова (e.g. C++ или URL-параметры).
+    # (?!\d)  — не матчить если продолжаются цифры (e.g. математическое выражение).
     (
         "PHONE_INTL",
-        re.compile(r"\+(?!7)\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}"),
+        re.compile(r"(?<!\w)\+(?!7)\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}(?!\d)"),
         "[REDACTED_PHONE]",
     ),
     # Generic secret: key=value / token=value / password=value
@@ -118,7 +122,32 @@ def scan(text: str) -> list[dict]:
                 "start": m.start(),
                 "end": m.end(),
             })
-    return findings
+    # Убираем перекрывающиеся matches: при перекрытии оставляем то,
+    # у которого start меньше (покрывает больше текста слева); при равном
+    # start — то, у которого end больше (длиннее match = специфичнее).
+    # Это корректно для GENERIC_SECRET vs API_KEY: GENERIC захватывает
+    # «api_key=sk-proj-...» целиком, а API_KEY — только «sk-proj-...».
+    # Победитель — тот кто начинается раньше и/или длиннее.
+    return _remove_overlapping(findings)
+
+
+def _remove_overlapping(findings: list[dict]) -> list[dict]:
+    """Из перекрывающихся findings оставить одно — с наименьшим start,
+    при равном start — с наибольшим end (самое длинное/раннее).
+    """
+    if not findings:
+        return findings
+    # Сортируем: сначала по start (меньший = раньше), при равенстве — по end (больший = длиннее)
+    sorted_f = sorted(findings, key=lambda f: (f["start"], -f["end"]))
+    result = [sorted_f[0]]
+    for current in sorted_f[1:]:
+        last = result[-1]
+        if current["start"] < last["end"]:
+            # Перекрытие: current начинается до конца last.
+            # Оставляем last (он раньше/длиннее по сортировке), пропускаем current.
+            continue
+        result.append(current)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -194,33 +223,67 @@ def scan_base64(text: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# mask_messages — удобная обёртка для списка messages
+# mask_messages — обработка списка messages с учётом роли отправителя
 # ---------------------------------------------------------------------------
 
+# Роли, для которых применяется маскирование секретов.
+# tool-сообщения — retrieved контент (результат вызова инструмента).
+# LLM должен видеть его целиком, иначе теряется смысл вызова.
+# Секреты в tool-результатах фиксируются в findings, но текст не изменяется.
+_ROLES_TO_MASK = {"user", "system"}
+
+
 def mask_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Применить mask() к полю content каждого сообщения.
+    """Обработать список messages согласно политике по ролям.
+
+    Политика:
+      user / system — маскируем секреты: пользователь не должен случайно
+                      отправлять свои credentials в LLM.
+      tool          — только сканируем и логируем: контент нужен LLM для ответа,
+                      маскирование сломает поведение инструмента.
+      assistant     — пропускаем: это уже ответы LLM, не пользовательский ввод.
 
     Returns:
-        (masked_messages, all_findings)
+        (обработанные messages, все findings по всем ролям)
     """
     all_findings: list[dict] = []
     result = []
+
     for msg in messages:
+        role = msg.get("role", "")
         content = msg.get("content", "")
-        if isinstance(content, str):
-            masked_content, findings = mask(content)
-            # Также проверяем base64
-            b64_findings = scan_base64(content)
-            if b64_findings:
-                # Маскируем base64-блоки с найденными секретами
-                for f in sorted(b64_findings, key=lambda x: x["start"], reverse=True):
-                    mask_label = _get_mask_label(f["type"])
-                    masked_content = (
-                        masked_content[: f["start"]] + mask_label + masked_content[f["end"]:]
-                    )
-                all_findings.extend(b64_findings)
-            all_findings.extend(findings)
-            result.append({**msg, "content": masked_content})
-        else:
+
+        if not isinstance(content, str):
             result.append(msg)
+            continue
+
+        if role in _ROLES_TO_MASK:
+            # Собираем все findings из оригинального контента в одном месте,
+            # чтобы позиции не съехали после первой замены.
+            regular_findings = scan(content)
+            b64_findings = scan_base64(content)
+            combined = _remove_overlapping(
+                sorted(regular_findings + b64_findings, key=lambda f: (f["start"], -f["end"]))
+            )
+            # Один проход по оригиналу в обратном порядке — позиции не сдвигаются.
+            masked_content = content
+            for f in sorted(combined, key=lambda f: f["start"], reverse=True):
+                mask_label = _get_mask_label(f["type"])
+                masked_content = masked_content[: f["start"]] + mask_label + masked_content[f["end"]:]
+            all_findings.extend(combined)
+            result.append({**msg, "content": masked_content})
+
+        elif role == "tool":
+            # Только сканируем: фиксируем факт наличия секрета в retrieved контенте,
+            # но текст не трогаем — LLM должен видеть документ без изменений.
+            findings = scan(content) + scan_base64(content)
+            for f in findings:
+                f["masked"] = False  # явно помечаем что маскирование не применялось
+            all_findings.extend(findings)
+            result.append(msg)
+
+        else:
+            # assistant и прочие роли — пропускаем без изменений
+            result.append(msg)
+
     return result, all_findings

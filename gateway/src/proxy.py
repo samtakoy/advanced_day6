@@ -38,9 +38,13 @@ def proxy_chat(
     model: str = "gpt-4o-mini",
     temperature: float | None = None,
     max_tokens: int | None = None,
+    **extra_kwargs,
 ) -> object:
-    """Отправить запрос в LLM, вернуть сырой ChatCompletion объект."""
-    # OpenRouter требует префикс провайдера если не задан
+    """Отправить запрос в LLM, вернуть сырой ChatCompletion объект.
+
+    extra_kwargs прозрачно пробрасываются в API: tools, tool_choice,
+    top_p, frequency_penalty, presence_penalty, stop, n, seed, и т.д.
+    """
     if _provider() == "openrouter" and "/" not in model:
         model = f"openai/{model}"
 
@@ -49,5 +53,6 @@ def proxy_chat(
         kwargs["temperature"] = temperature
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
+    kwargs.update(extra_kwargs)
 
     return get_client().chat.completions.create(**kwargs)

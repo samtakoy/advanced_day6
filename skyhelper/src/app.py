@@ -85,6 +85,7 @@ class ChatRequest(BaseModel):
     prompt_mode: Literal["naive", "hardened"] = "hardened"
     sanitize: bool = True
     validate_output: bool = True
+    use_gateway: bool = False  # если True — запросы идут через LLM Gateway
 
 
 class ToolCallRecord(BaseModel):
@@ -126,7 +127,9 @@ async def chat(
     policies.check_pending_timeout(session)
     session.history.append({"role": "user", "content": request.message})
     reply, added, calls, alerts = llm.chat(
-        session.history, session, prompt_mode=request.prompt_mode
+        session.history, session,
+        prompt_mode=request.prompt_mode,
+        use_gateway=request.use_gateway,
     )
     session.history.extend(added)
     audit.log_turn(

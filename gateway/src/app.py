@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from gateway.src import audit, cost_tracker, input_guard, output_guard, proxy, rate_limiter
 
@@ -14,15 +14,19 @@ app = FastAPI(title="LLM Gateway", version="0.4.0")
 
 
 class Message(BaseModel):
+    model_config = ConfigDict(extra="allow")
     role: str
-    content: str
+    content: str | None = None  # None у tool-result и assistant с tool_calls
 
 
 class ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
     model: str = "gpt-4o-mini"
     messages: list[Message]
     temperature: float | None = None
     max_tokens: int | None = None
+    # Все остальные поля (tools, tool_choice, top_p, stop, n, seed, ...)
+    # попадают в model_extra и пробрасываются в upstream.
 
 
 @app.get("/healthz")
@@ -63,38 +67,46 @@ async def chat_completions(
     mode = x_gateway_mode.lower()
 
     # --- Input Guard ---
-    all_input_findings: list[dict] = []
-    for msg in messages:
-        content = msg.get("content", "")
-        if isinstance(content, str):
-            all_input_findings.extend(input_guard.scan(content))
-            all_input_findings.extend(input_guard.scan_base64(content))
+    # mask_messages применяет разную политику по ролям:
+    #   user/system — маскируем секреты
+    #   tool        — только фиксируем (retrieved контент не трогаем)
+    #   assistant   — пропускаем
+    # Вызываем всегда, чтобы собрать findings для аудита и block-проверки.
+    messages, all_input_findings = input_guard.mask_messages(messages)
 
-    if all_input_findings and mode == "block":
-        secret_types = list({f["type"] for f in all_input_findings})
-        return JSONResponse(
-            {
-                "error": {
-                    "message": "Request blocked: secrets detected in input",
-                    "type": "input_guard_violation",
-                    "secrets_found": secret_types,
-                    "count": len(all_input_findings),
-                }
-            },
-            status_code=400,
-            headers={"X-Gateway-Input-Secrets": str(len(all_input_findings))},
-        )
-
-    if mode == "mask":
-        messages, all_input_findings = input_guard.mask_messages(messages)
+    if mode == "block":
+        # Блокируем только по секретам из user/system — tool-секреты не повод
+        # отказывать: это retrieved контент, который уже попал в систему.
+        blockable = [f for f in all_input_findings if f.get("masked") is not False]
+        if blockable:
+            secret_types = list({f["type"] for f in blockable})
+            return JSONResponse(
+                {
+                    "error": {
+                        "message": "Request blocked: secrets detected in input",
+                        "type": "input_guard_violation",
+                        "secrets_found": secret_types,
+                        "count": len(blockable),
+                    }
+                },
+                status_code=400,
+                headers={"X-Gateway-Input-Secrets": str(len(blockable))},
+            )
 
     # --- Proxy ---
+    extra = {k: v for k, v in (request.model_extra or {}).items() if k != "stream"}
+    if (request.model_extra or {}).get("stream"):
+        return JSONResponse(
+            {"error": {"message": "Streaming is not supported by this gateway", "type": "unsupported_feature"}},
+            status_code=400,
+        )
     try:
         response = proxy.proxy_chat(
             messages=messages,
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
+            **extra,
         )
     except Exception as exc:
         return JSONResponse(

@@ -95,10 +95,17 @@
     <label><input type="radio" name="sanitize" value="on" checked> Вкл</label>
     <label><input type="radio" name="sanitize" value="off"> Выкл</label>
   </div>
-  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+  <div class="meta" style="margin-bottom:0.4em;display:flex;gap:0.8em;align-items:center">
     <span>Валидация ответа:</span>
     <label><input type="radio" name="validate_output" value="on" checked> Вкл</label>
     <label><input type="radio" name="validate_output" value="off"> Выкл</label>
+  </div>
+  <div class="meta" style="margin-bottom:0.8em;display:flex;gap:0.8em;align-items:center">
+    <label style="display:flex;gap:0.4em;align-items:center;cursor:pointer">
+      <input type="checkbox" id="use_gateway">
+      <span>Через Gateway <code style="font-size:0.8em;opacity:0.7">:8001</code></span>
+    </label>
+    <span id="gateway_status" style="font-size:0.8em;opacity:0.6"></span>
   </div>
   <div id="history"></div>
   <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
@@ -122,6 +129,16 @@
     const sanitizeRadios = document.querySelectorAll('input[name="sanitize"]');
     const validateRadios = document.querySelectorAll('input[name="validate_output"]');
     const vlabel = document.getElementById('vlabel');
+    const gatewayCheckbox = document.getElementById('use_gateway');
+    const gatewayStatus = document.getElementById('gateway_status');
+
+    // Восстановить состояние галочки из localStorage
+    gatewayCheckbox.checked = localStorage.getItem('use_gateway') === 'true';
+    gatewayCheckbox.addEventListener('change', () => {
+      localStorage.setItem('use_gateway', gatewayCheckbox.checked);
+      gatewayStatus.textContent = gatewayCheckbox.checked ? '(запросы идут через прокси)' : '';
+    });
+    gatewayStatus.textContent = gatewayCheckbox.checked ? '(запросы идут через прокси)' : '';
 
     bearerInput.value = localStorage.getItem('bearer') || '';
     bearerInput.addEventListener('input', () => {
@@ -269,6 +286,7 @@
             prompt_mode: currentPromptMode(),
             sanitize: currentSanitize(),
             validate_output: currentValidateOutput(),
+            use_gateway: gatewayCheckbox.checked,
           }),
         });
         if (!r.ok) {
