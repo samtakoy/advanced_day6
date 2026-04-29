@@ -4,7 +4,10 @@ python-dotenv>=1.0.0
 jsonschema>=4.20.0
 numpy>=1.26.0
 
-# SkyHelper bot (skyhelper/)
+# Testing
+pytest>=8.0.0
+
+# SkyHelper bot (skyhelper/) + LLM Gateway (gateway/)
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.7.0
