@@ -98,6 +98,29 @@ def record(model: str, usage_dict: dict | None, cost_usd: float) -> None:
         ms.completion_tokens += usage_dict.get("completion_tokens", 0) or 0
 
 
+def extract_cost_from_usage(model: str, usage: dict) -> tuple[float, str]:
+    """Cost из usage-dict (для streaming). Returns (cost_usd, source).
+
+    Ollama — всегда 0/local, чтобы /stats не показывал липовую стоимость.
+    OpenRouter может вернуть cost прямо в usage даже в streaming.
+    """
+    from gateway.src.proxy import _provider  # локальный импорт — нет цикла
+    if _provider() == "ollama":
+        return 0.0, "local"
+
+    provider_cost = usage.get("cost")
+    if provider_cost is not None:
+        return round(float(provider_cost), 8), "provider"
+
+    model_key = model.split("/")[-1] if "/" in model else model
+    cost = _calculate(
+        model_key,
+        usage.get("prompt_tokens", 0) or 0,
+        usage.get("completion_tokens", 0) or 0,
+    )
+    return cost, "calculated"
+
+
 def get_stats() -> dict:
     """Вернуть текущую статистику в виде dict (для /stats endpoint)."""
     return {

@@ -15,61 +15,69 @@ import re
 # Patterns: (name, compiled_regex, mask_label)
 # ---------------------------------------------------------------------------
 
-PATTERNS: list[tuple[str, re.Pattern, str]] = [
+# Tuple: (name, pattern, mask_label, value_group)
+# value_group=0  → маскируется весь match (group 0)
+# value_group=1  → маскируется только captured group(1) — имя переменной сохраняется
+PATTERNS: list[tuple[str, re.Pattern, str, int]] = [
     # OpenAI key (project format sk-proj-... и legacy sk-...)
     (
         "API_KEY",
         re.compile(r"sk-(?:proj-)?[a-zA-Z0-9_-]{20,}"),
         "[REDACTED_API_KEY]",
+        0,
     ),
     # GitHub PAT
     (
         "GITHUB_TOKEN",
         re.compile(r"ghp_[a-zA-Z0-9]{36,}"),
         "[REDACTED_GITHUB_TOKEN]",
+        0,
     ),
     # AWS Access Key ID
     (
         "AWS_KEY",
         re.compile(r"AKIA[0-9A-Z]{16}"),
         "[REDACTED_AWS_KEY]",
+        0,
     ),
     # Email
     (
         "EMAIL",
         re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}"),
         "[REDACTED_EMAIL]",
+        0,
     ),
     # Банковская карта (16 цифр с разделителями — Luhn проверяется отдельно)
     (
         "CARD",
         re.compile(r"\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4})\b"),
         "[REDACTED_CARD]",
+        1,
     ),
     # Телефон РФ.
-    # (?<!\w) — не матчить 8 или +7 после любого word-символа (цифры, буквы, _).
-    # (?!\d)  — не матчить если после номера ещё идут цифры (часть более длинного числа).
     (
         "PHONE_RU",
         re.compile(r"(?<!\w)(?:\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)"),
         "[REDACTED_PHONE]",
+        0,
     ),
     # Международный телефон (7+ цифр с +).
-    # (?<!\w) — не матчить + внутри слова (e.g. C++ или URL-параметры).
-    # (?!\d)  — не матчить если продолжаются цифры (e.g. математическое выражение).
     (
         "PHONE_INTL",
         re.compile(r"(?<!\w)\+(?!7)\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}(?!\d)"),
         "[REDACTED_PHONE]",
+        0,
     ),
-    # Generic secret: key=value / token=value / password=value
+    # Generic secret: key=value → маскируем только value (group 1), имя переменной сохраняется.
+    # (?!\[REDACTED_) — не трогаем уже замаскированные плейсхолдеры (идемпотентность).
     (
         "GENERIC_SECRET",
         re.compile(
             r"(?i)(?:api[_\-]?key|secret[_\-]?key|secret|token|password|passwd|pwd)"
-            r"\s*[:=]\s*['\"]?([^\s'\"]{8,})"
+            r"\s*[:=]\s*['\"]?(?!\[REDACTED_)([^\s'\"]{8,})"
         ),
         "[REDACTED_GENERIC_SECRET]",
+        1,
     ),
 ]
 
@@ -110,17 +118,17 @@ def scan(text: str) -> list[dict]:
     if not text:
         return []
     findings: list[dict] = []
-    for name, pattern, _mask in PATTERNS:
+    for name, pattern, _mask, vg in PATTERNS:
         for m in pattern.finditer(text):
-            match_str = m.group(0)
-            # Luhn-фильтр для карт
-            if name == "CARD" and not _luhn_check(match_str):
+            # Luhn-фильтр для карт (проверяем полный match, group 0)
+            if name == "CARD" and not _luhn_check(m.group(0)):
                 continue
+            # vg=0 → весь match; vg=1 → только captured group (значение без имени переменной)
             findings.append({
                 "type": name,
-                "match": match_str,
-                "start": m.start(),
-                "end": m.end(),
+                "match": m.group(vg),
+                "start": m.start(vg),
+                "end": m.end(vg),
             })
     # Убираем перекрывающиеся matches: при перекрытии оставляем то,
     # у которого start меньше (покрывает больше текста слева); при равном
@@ -177,7 +185,7 @@ def mask(text: str) -> tuple[str, list[dict]]:
 
 
 def _get_mask_label(secret_type: str) -> str:
-    for name, _pattern, label in PATTERNS:
+    for name, _pattern, label, _vg in PATTERNS:
         if name == secret_type:
             return label
     return "[REDACTED]"
@@ -226,11 +234,7 @@ def scan_base64(text: str) -> list[dict]:
 # mask_messages — обработка списка messages с учётом роли отправителя
 # ---------------------------------------------------------------------------
 
-# Роли, для которых применяется маскирование секретов.
-# tool-сообщения — retrieved контент (результат вызова инструмента).
-# LLM должен видеть его целиком, иначе теряется смысл вызова.
-# Секреты в tool-результатах фиксируются в findings, но текст не изменяется.
-_ROLES_TO_MASK = {"user", "system"}
+_ROLES_TO_MASK = {"user", "system", "tool"}
 
 
 def mask_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -253,37 +257,40 @@ def mask_messages(messages: list[dict]) -> tuple[list[dict], list[dict]]:
         role = msg.get("role", "")
         content = msg.get("content", "")
 
-        if not isinstance(content, str):
-            result.append(msg)
-            continue
-
         if role in _ROLES_TO_MASK:
-            # Собираем все findings из оригинального контента в одном месте,
-            # чтобы позиции не съехали после первой замены.
-            regular_findings = scan(content)
-            b64_findings = scan_base64(content)
-            combined = _remove_overlapping(
-                sorted(regular_findings + b64_findings, key=lambda f: (f["start"], -f["end"]))
-            )
-            # Один проход по оригиналу в обратном порядке — позиции не сдвигаются.
-            masked_content = content
-            for f in sorted(combined, key=lambda f: f["start"], reverse=True):
-                mask_label = _get_mask_label(f["type"])
-                masked_content = masked_content[: f["start"]] + mask_label + masked_content[f["end"]:]
-            all_findings.extend(combined)
-            result.append({**msg, "content": masked_content})
-
-        elif role == "tool":
-            # Только сканируем: фиксируем факт наличия секрета в retrieved контенте,
-            # но текст не трогаем — LLM должен видеть документ без изменений.
-            findings = scan(content) + scan_base64(content)
-            for f in findings:
-                f["masked"] = False  # явно помечаем что маскирование не применялось
-            all_findings.extend(findings)
-            result.append(msg)
-
+            if isinstance(content, str):
+                masked_content, combined = _mask_text(content)
+                all_findings.extend(combined)
+                result.append({**msg, "content": masked_content})
+            elif isinstance(content, list):
+                # Content blocks формат: [{"type": "text", "text": "..."}, ...]
+                new_blocks = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+                        masked_text, combined = _mask_text(block["text"])
+                        all_findings.extend(combined)
+                        new_blocks.append({**block, "text": masked_text})
+                    else:
+                        new_blocks.append(block)
+                result.append({**msg, "content": new_blocks})
+            else:
+                result.append(msg)
         else:
             # assistant и прочие роли — пропускаем без изменений
             result.append(msg)
 
     return result, all_findings
+
+
+def _mask_text(content: str) -> tuple[str, list[dict]]:
+    """Применить scan + mask к одному текстовому блоку."""
+    regular_findings = scan(content)
+    b64_findings = scan_base64(content)
+    combined = _remove_overlapping(
+        sorted(regular_findings + b64_findings, key=lambda f: (f["start"], -f["end"]))
+    )
+    masked = content
+    for f in sorted(combined, key=lambda f: f["start"], reverse=True):
+        mask_label = _get_mask_label(f["type"])
+        masked = masked[: f["start"]] + mask_label + masked[f["end"]:]
+    return masked, combined

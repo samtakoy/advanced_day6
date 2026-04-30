@@ -36,3 +36,5 @@ src/ft_client/last_*.json
 
 # SkyHelper runtime artifacts (bookings, session logs)
 /skyhelper/logs/
+/.claude/settings.local.json
+/gateway/logs/audit.jsonl
