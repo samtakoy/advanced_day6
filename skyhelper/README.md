@@ -1,98 +1,259 @@
 # SkyHelper
 
-Travel-booking чат-бот для security-демо.
+Travel-booking чат-бот для security-демо. Реализует многоуровневую защиту от prompt injection, indirect injection и brute-force атак.
 
-Документация по архитектуре и threat-model — см. `plans/day12_bot_spec.md`,
-`docs/security.md`.
+> **Совместимость:** чат-бот проверялся с моделью `gpt-4o-mini` (через OpenAI и OpenRouter). Работа с другими моделями не гарантируется — качество tool-calling и следования инструкциям зависит от модели.
 
-## Запуск
+---
+
+## Архитектура
+
+```
+Браузер / curl
+      │
+      ▼  :8000
+┌─────────────────┐
+│   SkyHelper     │  FastAPI — чат, tools, guards, session
+│  (skyhelper/)   │
+└────────┬────────┘
+         │ опционально (use_gateway: true)
+         ▼  :8001
+┌─────────────────┐
+│   LLM Gateway   │  FastAPI proxy — input/output guard, rate limit, audit
+│   (gateway/)    │
+└────────┬────────┘
+         │
+         ▼
+    OpenAI / OpenRouter / Ollama
+```
+
+Gateway опционален. Без него SkyHelper ходит в LLM напрямую. С ним — запросы проходят через дополнительный слой input/output guard и полный audit-лог.
+Нужна галочка в клиенте.
+---
+
+## Быстрый старт
+
+### 1. Предварительные требования
+
+- Python 3.11+
+- Один из API-ключей: `OPENROUTER_API_KEY` или `OPENAI_API_KEY`
+
+### 2. Установка
 
 ```bash
-# из корня репозитория
-source .venv/bin/activate         # Windows: .venv\Scripts\activate
-pip install -r requirements.txt   # первый раз / при изменении requirements
-export OPENAI_API_KEY=sk-...      # либо в .env файле
+# из корня репозитория advanced_day6/
+python -m venv .venv
+
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+cp .env.example .env   # заполнить API-ключ
+```
+
+### 3. Запуск SkyHelper (минимум)
+
+```bash
 uvicorn skyhelper.src.app:app --reload --port 8000
 ```
 
-Открыть в браузере: <http://localhost:8000/>
+Открыть: <http://localhost:8000/>
 
-## Конфигурация (env vars)
+### 4. Запуск с Gateway (полный стек)
+
+Два терминала:
+
+```bash
+# Терминал 1 — Gateway
+uvicorn gateway.src.app:app --reload --port 8001
+
+# Терминал 2 — SkyHelper
+uvicorn skyhelper.src.app:app --reload --port 8000
+```
+
+В UI включить чекбокс **«Через Gateway :8001»** — или передать `"use_gateway": true` в теле запроса.
+
+### 5. Smoke-test
+
+```bash
+# Базовый запрос (без auth)
+curl -s -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "найди рейс в Дубай на октябрь"}' | python -m json.tool
+
+# Healthcheck
+curl http://localhost:8000/healthz
+curl http://localhost:8001/healthz
+```
+
+---
+
+## Конфигурация SkyHelper
 
 | Переменная | Дефолт | Назначение |
 |---|---|---|
-| `OPENROUTER_API_KEY` или `OPENAI_API_KEY` | (нужен один из двух) | Если задан `OPENROUTER_API_KEY` — клиент идёт через `https://openrouter.ai/api/v1` и префиксует модель `openai/`. Иначе — напрямую в OpenAI. |
-| `SKYHELPER_MODEL` | `gpt-4o-mini` | Модель для чата. Можно с явным провайдером (`openai/gpt-4o-mini`, `anthropic/claude-haiku-4-5-20251001`, ...). |
-| `SKYHELPER_BEARER_TOKEN` | (нет) | Если задан — `/chat` требует `Authorization: Bearer <token>`. Если не задан — auth выключен (dev-режим, лог-предупреждение при старте). **Перед публичной экспозицией обязательно задать.** Сгенерировать: `python -c "import secrets; print(secrets.token_urlsafe(24))"`. |
-| `SKYHELPER_RATE_LIMIT_PER_TOKEN` | `30` | Лимит запросов в окно на один Bearer-токен (защита от token-DoS). |
-| `SKYHELPER_RATE_LIMIT_PER_USER` | `30` | Лимит запросов в окно на один X-User-Id (защита от tenancy-enumeration). |
-| `SKYHELPER_RATE_LIMIT_WINDOW` | `60` | Размер окна в секундах для обоих лимитов. |
+| `OPENROUTER_API_KEY` или `OPENAI_API_KEY` | (обязателен один) | Если задан `OPENROUTER_API_KEY` — клиент идёт через OpenRouter, модель префиксуется `openai/`. Иначе — напрямую в OpenAI. |
+| `SKYHELPER_MODEL` | `gpt-4o-mini` | Модель для чата. Без префикса (`gpt-4o-mini`) — работает с обоими провайдерами. С префиксом `openai/gpt-4o-mini` или `anthropic/claude-haiku-4-5-20251001` — только через OpenRouter. |
+| `SKYHELPER_BEARER_TOKEN` | (нет) | Если задан — `/chat` требует `Authorization: Bearer <token>`. Если не задан — auth выключен (dev-режим, предупреждение в лог). **Обязательно задать перед публичной экспозицией.** |
+| `SKYHELPER_RATE_LIMIT_PER_TOKEN` | `30` | Лимит запросов в окно на один Bearer-токен. |
+| `SKYHELPER_RATE_LIMIT_PER_USER` | `30` | Лимит запросов в окно на один `X-User-Id`. |
+| `SKYHELPER_RATE_LIMIT_WINDOW` | `60` | Размер окна в секундах для обоих rate-limit'ов. |
+| `SKYHELPER_GATEWAY_URL` | `http://localhost:8001` | URL Gateway-прокси. Используется когда `use_gateway: true`. |
+| `SKYHELPER_LOCK_SETTINGS` | `true` | Если `true` — замораживает настройки безопасности: всегда `hardened`-промпт, санитизация и валидация ответа включены. Переписывается на сервере независимо от значений в запросе. UI показывает `🔒 заморожено`. |
 
-### Использование auth и rate-limit
+## Конфигурация Gateway
 
-**Через UI:** введите токен в поле «Bearer» вверху страницы (сохранится в localStorage). X-User-Id — отдельным полем.
+| Переменная | Дефолт | Назначение |
+|---|---|---|
+| `OPENROUTER_API_KEY` или `OPENAI_API_KEY` | (обязателен один) | Ключ для upstream LLM. Gateway авторизуется сам — клиент ключ не передаёт. |
+| `OLLAMA_BASE_URL` | (нет) | Если задан — Gateway ходит в Ollama (приоритет > OpenRouter > OpenAI). |
+| `GATEWAY_RATE_LIMIT` | `20` | Макс. запросов в окно per IP. |
+| `GATEWAY_RATE_WINDOW` | `60` | Размер окна в секундах. |
+| `GATEWAY_LOG_FULL` | `false` | Если `true` — в `gateway/logs/audit.jsonl` пишутся полные тексты `messages_full` и `response_full`. Нужно для наблюдения за суммаризацией и реальным содержимым запросов к LLM. |
+
+---
+
+## Работа через Ollama (локальная LLM)
+
+Ollama позволяет запускать LLM полностью локально — без API-ключей и без отправки данных наружу. SkyHelper сам не умеет ходить в Ollama напрямую — только через Gateway.
+
+### 1. Установить Ollama
+
+Скачать с [ollama.com](https://ollama.com) и установить. После установки Ollama запускается как фоновый сервис на `http://localhost:11434`.
+
+### 2. Скачать модель
+
+```bash
+ollama pull <имя-модели>
+ollama list   # проверить что модель доступна
+```
+
+### 3. Запуск: SkyHelper → Gateway → Ollama
+
+Gateway выбирает Ollama автоматически если задан `OLLAMA_BASE_URL`.
+
+**Терминал 1 — Gateway с Ollama:**
+
+```bash
+# Linux / macOS
+export OLLAMA_BASE_URL=http://localhost:11434/v1
+uvicorn gateway.src.app:app --reload --port 8001
+```
+
+```powershell
+# Windows (PowerShell)
+$env:OLLAMA_BASE_URL = "http://localhost:11434/v1"
+uvicorn gateway.src.app:app --reload --port 8001
+```
+
+**Терминал 2 — SkyHelper:**
+
+```bash
+# Linux / macOS
+export SKYHELPER_MODEL=<имя-модели-в-ollama>
+# OPENROUTER_API_KEY НЕ задавать (см. примечание ниже)
+uvicorn skyhelper.src.app:app --reload --port 8000
+```
+
+```powershell
+# Windows (PowerShell)
+$env:SKYHELPER_MODEL = "<имя-модели-в-ollama>"
+uvicorn skyhelper.src.app:app --reload --port 8000
+```
+
+В UI включить чекбокс **«Через Gateway :8001»**.
+
+### Важно: не задавать OPENROUTER_API_KEY вместе с Ollama
+
+Если `OPENROUTER_API_KEY` задан — SkyHelper автоматически добавляет префикс `openai/` к имени модели. Ollama такой формат не понимает и вернёт ошибку. Если нужен OpenRouter для прямых запросов и Ollama для gateway — не задавайте `OPENROUTER_API_KEY`, модель указывайте без префикса.
+
+---
+
+## Auth и rate-limit
+
+**Генерация токена:**
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(24))"
+```
+
+**Через UI:** поле «Bearer» вверху страницы (сохраняется в localStorage). `X-User-Id` — отдельным полем.
 
 **Через curl:**
+
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-User-Id: PARTNER_001" \
   -H "Content-Type: application/json" \
-  -d '{"message":"найди билет в Бали"}'
+  -d '{"message": "найди билет в Бали"}'
 ```
 
-При превышении лимита — `429 Rate limit exceeded ...`. При неверном токене — `401 Invalid Bearer token`.
+При превышении лимита — `429 Rate limit exceeded`. При неверном токене — `401 Invalid Bearer token`.
 
-## Запуск для парной работы (Day 12–14)
+---
 
-1. **Сгенерируйте Bearer-токен:**
-   ```bash
-   python -c "import secrets; print('SKYHELPER_BEARER_TOKEN=' + secrets.token_urlsafe(24))"
-   ```
-   Сохраните в `.env` или экспортируйте в окружение.
+## Запуск для Red Team сессии
 
-2. **Запустите бота:**
-   ```bash
-   uvicorn skyhelper.src.app:app --port 8000
-   ```
-   В логах не должно быть warning про auth — он включён.
+### 1. Сгенерировать токен и запустить
 
-3. **В отдельном терминале — поднимите HTTPS-тоннель:**
+```bash
+# Linux / macOS
+export SKYHELPER_BEARER_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
+export SKYHELPER_LOCK_SETTINGS=true   # заморозить защиты
+uvicorn skyhelper.src.app:app --port 8000
 
-   Через cloudflared (бесплатно, не требует регистрации):
-   ```bash
-   cloudflared tunnel --url http://localhost:8000
-   ```
-   В выводе будет публичный URL вида `https://<random>.trycloudflare.com`.
+# Windows (PowerShell)
+$env:SKYHELPER_BEARER_TOKEN = $(python -c "import secrets; print(secrets.token_urlsafe(24))")
+$env:SKYHELPER_LOCK_SETTINGS = "true"
+uvicorn skyhelper.src.app:app --port 8000
+```
 
-   Альтернатива — ngrok:
-   ```bash
-   ngrok http 8000
-   ```
+### 2. Открыть публичный доступ
 
-4. **Передайте напарнику:**
-   - Публичный URL (через любой канал)
-   - **Bearer token** (через защищённый канал — Signal, encrypted DM, etc.)
-   - **X-User-Id**: например, `PARTNER_001`
-   - Файл [`PARTNER_BRIEF.md`](PARTNER_BRIEF.md) — самодостаточный onboarding для атакующего
+```bash
+# cloudflared (бесплатно, без регистрации)
+cloudflared tunnel --url http://localhost:8000
 
-5. **Логи атак** хранятся в `skyhelper/logs/sessions/<sid>.jsonl`. После сессии можно делать post-mortem: парсить `tool_calls`, `guard_alerts`, успешные и провальные техники.
+# или ngrok
+ngrok http 8000
+```
 
-### Безопасность во время сессии
+В выводе будет URL вида `https://<random>.trycloudflare.com`.
 
-- Перезапускайте сервер между сессиями с новым токеном — старый токен может утечь в чате/логах
-- Можно вручную сбросить voucher seed-данные удалив `skyhelper/logs/bookings.jsonl` (на старте сервера он пересоздастся из `seed_bookings.json`)
-- Cloudflared free-tunnel URL временный — на каждый запуск будет новый, это плюс для безопасности
+### 3. Передать партнёру
 
-## Прогресс по slice'ам
+- Публичный URL
+- Bearer token (через защищённый канал: Signal, encrypted DM)
+- `X-User-Id`: например, `PARTNER_001`
+- Файл `PARTNER_BRIEF.md` — описание атакуемой системы
 
-- [x] **Slice 1** — walking skeleton: FastAPI + LLM-чат + HTML-страница, без тулов
-- [x] **Slice 2** — `search_flights` end-to-end: native tool-calling loop, каталог рейсов
-- [x] **Slice 3** — booking flow: apply_voucher / propose_booking / book_flight + HITL-гейт через `policies.check_book_flight`
-- [x] **Slice 4** — `fetch_url` + web_mock (3 clean + 3 poisoned) + URL allowlist через `index.json`
-- [x] **Slice 4.5** — audit-видимость: tool-calls в ChatResponse + UI-рендер + per-session jsonl лог
-- [x] **Slice 5** — multi-user threat model: `X-User-Id` header, seed CRM (10 юзеров, 15 броней), `list_my_bookings` с tenancy-фильтром
-- [x] **Slice 6** — output guard + canary, fetch_url pre-process (strip HTML-комментов и hidden span), prompt-hardening (anti-extraction, фикс voucher/passenger guessing)
-- [x] **Slice 7** — Bearer auth (опциональный) + rate limit per-token и per-userId
-- [x] **Slice 8** — `PARTNER_BRIEF.md` (one-pager для red-team напарника) + раздел README про cloudflared tunnel и подготовку к парной работе
-- [ ] Slice 8 — Cloudflared tunnel + partner_brief.md
+### 4. Безопасность во время сессии
+
+- Перезапускать сервер с новым токеном между сессиями — старый токен может утечь в чате или логах
+- Сбросить seed-брони: удалить `skyhelper/logs/bookings.jsonl` (пересоздастся при старте из `seed_bookings.json`)
+- Cloudflared free-tunnel URL временный — каждый запуск новый, это плюс для безопасности
+
+---
+
+## Слои защиты
+
+| # | Слой | Где | Что делает |
+|---|---|---|---|
+| 0 | Tool descriptions | `tools.py` | В hardened-режиме UNTRUSTED-хинты в описаниях инструментов |
+| 1 | System prompt | `prompts/system_hardened.md` | Инструкции по roleplay-устойчивости, canary-токен |
+| 2 | Input sanitization | `guards.py` | Удаление скрытого HTML и zero-width символов из retrieved контента |
+| 3 | Tool policies | `policies.py` | Проверки перед каждым tool-вызовом (HITL-гейт, rate-limit промокодов) |
+| 4 | Output validation | `guards.py` + `llm.py` | Canary leak detection, LLM-based output validator |
+| 5 | HTTP middleware | `app.py` | Bearer auth, rate-limit per-token и per-user |
+| 6 | Gateway | `gateway/` | Input/output guard на уровне HTTP-прокси, audit-лог |
+
+---
+
+## Логи
+
+- `skyhelper/logs/bookings.jsonl` — все созданные бронирования
+- `gateway/logs/audit.jsonl` — полный audit-лог Gateway (при `GATEWAY_LOG_FULL=true` включает `messages_full` и `response_full`)

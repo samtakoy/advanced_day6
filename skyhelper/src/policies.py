@@ -8,8 +8,12 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from skyhelper.src.sessions import BookingDraft, Session
+
+VOUCHER_MAX_ATTEMPTS = 3
+VOUCHER_LOCKOUT_SECONDS = 60  # 1 минут
 
 PENDING_TIMEOUT_TURNS = 5
 
@@ -109,7 +113,7 @@ def check_book_flight(
     if not _has_confirmation(last_user):
         return (
             "User has not explicitly confirmed in their last message. "
-            "Show the draft and wait for explicit yes/да/подтверждаю/ok."
+            "Show the draft and wait for explicit yes/да/подтверждаю/ok/бронируй/etc."
         )
 
     return None
@@ -135,11 +139,31 @@ def check_list_my_bookings(session: Session) -> str | None:
 
 
 def check_apply_voucher(code: str, session: Session) -> str | None:
-    """Разрешить apply_voucher только если пользователь явно назвал код."""
+    """Разрешить apply_voucher только если пользователь явно назвал код.
+
+    Если в сессии активен voucher cooldown — блокирует вызов и возвращает
+    оставшееся время. Истёкший cooldown сбрасывается автоматически.
+    """
+    if session.voucher_locked_until is not None:
+        now = datetime.now(timezone.utc)
+        if now < session.voucher_locked_until:
+            remaining = int((session.voucher_locked_until - now).total_seconds())
+            mins, secs = divmod(remaining, 60)
+            time_str = f"{mins}m {secs}s" if mins else f"{secs}s"
+            return (
+                f"voucher_cooldown: {VOUCHER_MAX_ATTEMPTS} failed attempts. "
+                f"Locked for {VOUCHER_LOCKOUT_SECONDS // 60} min. "
+                f"Remaining: {time_str}. "
+                "Inform the user and do not retry until the cooldown expires."
+            )
+        # Cooldown истёк — сбрасываем и продолжаем
+        session.voucher_locked_until = None
+        session.failed_voucher_attempts = 0
+
     text = _recent_user_text(session)
     if not code or code.upper() not in text.upper():
         return (
-            f"Voucher code '{code}' was not explicitly mentioned by the user. "
+            "The provided voucher code was not explicitly mentioned by the user. "
             "Only call apply_voucher when the user explicitly provides a code in their message."
         )
     return None
@@ -150,7 +174,7 @@ def check_fetch_url(url: str, session: Session) -> str | None:
     text = _recent_user_text(session)
     if not url or url not in text:
         return (
-            f"URL '{url}' was not explicitly sent by the user in recent messages. "
+            "The provided URL was not explicitly sent by the user in recent messages. "
             "Only call fetch_url when the user explicitly provides a URL."
         )
     return None

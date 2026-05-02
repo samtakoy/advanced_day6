@@ -89,6 +89,7 @@
     <span>Промпт:</span>
     <label><input type="radio" name="prompt_mode" value="naive"> Обычный</label>
     <label><input type="radio" name="prompt_mode" value="hardened" checked> Усиленный</label>
+    <span id="settings-lock" style="display:none;color:#c00;font-weight:600" title="Настройки заморожены администратором">🔒 заморожено</span>
   </div>
   <div class="meta" style="margin-bottom:0.4em;display:flex;gap:0.8em;align-items:center">
     <span>Санитизация:</span>
@@ -108,7 +109,7 @@
     <span id="gateway_status" style="font-size:0.8em;opacity:0.6"></span>
   </div>
   <div id="history"></div>
-  <textarea id="input" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
+  <textarea id="input" maxlength="4000" placeholder="Куда летим? (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
   <div>
     <button id="send">Отправить</button>
     <span class="meta">user: <code id="uid">DEMO_USER</code> · session: <code id="sid">—</code> · prompt: <code id="pmode">hardened</code> · sanitize: <code id="slabel">on</code> · validate: <code id="vlabel">on</code></span>
@@ -265,6 +266,12 @@
     }
 
     async function send() {
+      // Defense in depth к серверному reject-if-busy: дизейбла кнопки мало —
+      // Enter-handler ниже вызывает send() напрямую и игнорирует disabled.
+      // Без этой проверки пользователь, набивающий Enter, генерил бы лавину
+      // запросов; сервер вернёт 409, но фронт всё равно зашумит историю
+      // user-сообщениями и красными "HTTP 409" блоками.
+      if (sendBtn.disabled) return;
       const msg = input.value.trim();
       if (!msg) return;
       append('user', msg);
@@ -322,6 +329,20 @@
         input.focus();
       }
     }
+
+    // Проверить lock_settings с сервера и заморозить контролы если нужно
+    fetch('/healthz').then(r => r.json()).then(data => {
+      if (data.lock_settings) {
+        // Принудительно выставить значения (localStorage мог сохранить другие)
+        for (const r of promptModeRadios) { r.checked = (r.value === 'hardened'); r.disabled = true; }
+        for (const r of sanitizeRadios)   { r.checked = (r.value === 'on');       r.disabled = true; }
+        for (const r of validateRadios)   { r.checked = (r.value === 'on');       r.disabled = true; }
+        pmodeLabel.textContent = 'hardened';
+        slabel.textContent = 'on';
+        vlabel.textContent = 'on';
+        document.getElementById('settings-lock').style.display = 'inline';
+      }
+    }).catch(() => {});
 
     sendBtn.onclick = send;
     input.addEventListener('keydown', (e) => {
